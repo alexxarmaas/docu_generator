@@ -34,7 +34,10 @@ with st.sidebar:
     if provider.ai_enabled:
         st.success(f"IA activa · {model_name}")
     else:
-        st.info("Modo fallback · añade OPENAI_API_KEY para activar análisis visual")
+        st.info(
+            "Modo local. La guía se estructura a partir de tu descripción, "
+            "pero las capturas no se interpretan visualmente."
+        )
 
 profile = load_profile(profile_name)
 
@@ -44,11 +47,15 @@ title = st.text_input(
 )
 
 instructions = st.text_area(
-    "¿Qué quieres explicar?",
-    height=130,
+    "Describe el flujo con tus palabras",
+    height=140,
     placeholder=(
-        "Explica cómo revisar las líneas detectadas antes de confirmar el documento. "
-        "Destaca cantidades, precios y descuentos."
+        "Ejemplo: Entras en Brisia, eliges el albarán que quieres revisar, "
+        "compruebas la información y confirmas cuando todo está correcto."
+    ),
+    help=(
+        "No hace falta redactarlo bonito. Escribe las acciones en orden; "
+        "el generador se encarga de estructurarlas."
     ),
 )
 
@@ -85,10 +92,10 @@ if generate:
     pipeline = DocumentationPipeline(provider=provider, profile=profile)
 
     with st.status("Generando documentación...", expanded=True) as status:
-        st.write("Analizando capturas…")
+        st.write("Preparando las capturas…")
         evidences = pipeline.analyze_images(images, instructions=instructions)
 
-        st.write("Redactando la guía…")
+        st.write("Construyendo los pasos de la guía…")
         guide = pipeline.generate_guide(
             title=title,
             instructions=instructions,
@@ -96,7 +103,7 @@ if generate:
             evidences=evidences,
         )
 
-        st.write("Revisando coherencia…")
+        st.write("Revisando la estructura…")
         review = pipeline.review_guide(guide=guide, evidences=evidences)
 
         status.update(label="Guía generada", state="complete", expanded=False)
@@ -113,30 +120,34 @@ if "guide" in st.session_state:
     images = st.session_state["images"]
 
     st.divider()
-    st.header(guide.title)
+    st.caption(f"{profile.get('product', profile.get('name', 'Producto'))} · GUÍA DE USUARIO")
+    st.title(guide.title)
+
     if guide.introduction:
         st.markdown(guide.introduction)
 
     image_lookup = {image["name"]: image for image in images}
 
     for number, section in enumerate(guide.sections, start=1):
-        st.subheader(f"{number}. {section.title}")
-        st.markdown(section.body)
-        if section.image_name and section.image_name in image_lookup:
-            st.image(
-                image_lookup[section.image_name]["bytes"],
-                caption=section.image_name,
-                use_container_width=True,
-            )
+        with st.container(border=True):
+            st.subheader(f"{number}. {section.title}")
+            st.markdown(section.body)
+            if section.image_name and section.image_name in image_lookup:
+                st.image(
+                    image_lookup[section.image_name]["bytes"],
+                    caption=f"Referencia visual · {section.image_name}",
+                    use_container_width=True,
+                )
+
+    if guide.closing_note:
+        st.info(guide.closing_note)
 
     if review.issues:
-        with st.expander(f"Revisión · {len(review.issues)} aviso(s)", expanded=True):
+        with st.expander(f"Revisión · {len(review.issues)} aviso(s)", expanded=False):
             for issue in review.issues:
                 st.warning(issue)
-    else:
-        st.success("Revisión superada: no se han detectado incoherencias evidentes.")
 
-    with st.expander("Evidencia detectada"):
+    with st.expander("Evidencia / diagnóstico"):
         for evidence in evidences:
             st.markdown(f"**{evidence.image_name} · {evidence.screen_name}**")
             if evidence.visible_elements:
@@ -154,7 +165,7 @@ if "guide" in st.session_state:
     )
     safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in guide.title.lower())
     st.download_button(
-        "Descargar paquete",
+        "Descargar guía",
         data=export_bytes,
         file_name=f"{safe_name or 'guia'}.zip",
         mime="application/zip",
