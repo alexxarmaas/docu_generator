@@ -73,11 +73,18 @@ Devuelve únicamente un objeto JSON con esta forma:
     {{
       "title": "...",
       "body": "...",
-      "image_name": "nombre-exacto-de-la-imagen-o-null"
+      "image_name": "nombre-exacto-de-la-imagen"
+    }},
+    {{
+      "title": "...",
+      "body": "...",
+      "image_name": null
     }}
   ],
   "closing_note": ""
 }}
+
+Usa null, sin comillas, cuando una sección no necesite imagen.
 """
     raw = provider.complete(prompt)
     data = parse_json_object(raw)
