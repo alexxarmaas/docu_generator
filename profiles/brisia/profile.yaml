@@ -1,0 +1,12 @@
+name: Brisia
+product: Brisia
+language: es
+instructions:
+  - Usa un tono claro, profesional y cercano.
+  - Prioriza los términos que aparecen en la propia interfaz de Brisia.
+  - Evita explicar detalles del motor OCR salvo que sean necesarios para el usuario.
+  - Presenta la revisión documental como una comprobación asistida, no como una garantía automática.
+brand:
+  primary: "#092D54"
+  accent: "#00B8A9"
+  surface: "#FAFAFA"
