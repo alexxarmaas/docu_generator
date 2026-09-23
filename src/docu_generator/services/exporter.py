@@ -9,6 +9,7 @@ from jinja2 import Template
 
 from docu_generator.config import PROJECT_ROOT
 from docu_generator.models import GuideBlock, GuideDraft, GuideSection, ReviewReport
+from docu_generator.services.docx_exporter import build_docx
 from docu_generator.services.pdf_exporter import build_pdf
 
 
@@ -43,11 +44,57 @@ def _section_blocks(section: GuideSection) -> list[GuideBlock]:
     return blocks
 
 
+def _markdown_table(rows: list[str]) -> list[str]:
+    parsed = [
+        [cell.strip() for cell in row.split("|")]
+        for row in rows
+        if row.strip()
+    ]
+    if not parsed:
+        return []
+
+    columns = max(len(row) for row in parsed)
+    normalized = [
+        row + [""] * (columns - len(row))
+        for row in parsed
+    ]
+
+    lines = [
+        "| " + " | ".join(normalized[0]) + " |",
+        "| " + " | ".join(["---"] * columns) + " |",
+    ]
+    lines.extend(
+        "| " + " | ".join(row) + " |"
+        for row in normalized[1:]
+    )
+    return lines
+
+
 def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
-    lines = [f"# {guide.title}", ""]
+    lines = [
+        f"# {guide.title}",
+        "",
+        f"**Tipo:** {guide.document_type}  ",
+        f"**Versión:** {guide.version}  ",
+        f"**Estado:** {guide.status}",
+        "",
+    ]
+
+    if guide.author:
+        lines.extend([f"**Autor:** {guide.author}", ""])
+    if guide.updated_at:
+        lines.extend([f"**Actualizado:** {guide.updated_at}", ""])
 
     if guide.introduction:
         lines.extend([guide.introduction, ""])
+
+    if guide.show_toc and guide.sections:
+        lines.extend(["## Contenido", ""])
+        lines.extend(
+            f"{index}. {section.title}"
+            for index, section in enumerate(guide.sections, start=1)
+        )
+        lines.append("")
 
     for index, section in enumerate(guide.sections, start=1):
         lines.extend([f"## {index}. {section.title}", ""])
@@ -77,6 +124,13 @@ def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
 
             elif block.type == "divider":
                 lines.extend(["---", ""])
+
+            elif block.type == "table":
+                lines.extend(_markdown_table(block.items))
+                lines.append("")
+
+            elif block.type == "pagebreak":
+                lines.extend(["<!-- pagebreak -->", ""])
 
     if guide.closing_note:
         lines.extend(["---", "", guide.closing_note, ""])
@@ -111,6 +165,14 @@ def render_html(
         rendered_blocks = []
 
         for block in _section_blocks(section):
+            table_rows = []
+            if block.type == "table":
+                table_rows = [
+                    [cell.strip() for cell in row.split("|")]
+                    for row in block.items
+                    if row.strip()
+                ]
+
             rendered_blocks.append(
                 {
                     "type": block.type,
@@ -125,6 +187,9 @@ def render_html(
                     "image_src": image_lookup.get(block.image_name or ""),
                     "label": block.label,
                     "variant": block.variant,
+                    "image_width": block.image_width,
+                    "align": block.align,
+                    "table_rows": table_rows,
                 }
             )
 
@@ -155,6 +220,7 @@ def build_export_zip(
     markdown_text = render_markdown(guide, review)
     html_text = render_html(guide, review, images, profile)
     pdf_bytes = build_pdf(guide, images, profile)
+    docx_bytes = build_docx(guide, images, profile)
 
     buffer = io.BytesIO()
 
@@ -162,6 +228,7 @@ def build_export_zip(
         archive.writestr("guide.md", markdown_text)
         archive.writestr("guide.html", html_text)
         archive.writestr("guide.pdf", pdf_bytes)
+        archive.writestr("guide.docx", docx_bytes)
         archive.writestr(
             "review.txt",
             "\n".join(review.issues) if review.issues else "Sin avisos de revisión.\n",
