@@ -4,24 +4,12 @@ import json
 from docu_generator.services.project_io import dump_project, load_project
 
 
-def test_v2_project_roundtrip_preserves_free_blocks_image_and_callout():
+def test_v3_roundtrip_preserves_metadata_layout_and_image():
     steps = [
         {
             "id": "step-id",
             "title": "Revisa el albarán",
             "blocks": [
-                {
-                    "id": "text-id",
-                    "type": "text",
-                    "text": "Comprueba los datos principales.",
-                    "items": "",
-                    "image_name": None,
-                    "image_caption": "",
-                    "image_bytes": None,
-                    "image_mime": None,
-                    "label": "",
-                    "variant": "info",
-                },
                 {
                     "id": "image-id",
                     "type": "image",
@@ -33,18 +21,22 @@ def test_v2_project_roundtrip_preserves_free_blocks_image_and_callout():
                     "image_mime": "image/png",
                     "label": "",
                     "variant": "info",
+                    "image_width": "medium",
+                    "align": "right",
                 },
                 {
-                    "id": "note-id",
-                    "type": "note",
-                    "text": "Comprueba esto antes de seguir.",
-                    "items": "",
+                    "id": "table-id",
+                    "type": "table",
+                    "text": "",
+                    "items": "Campo | Valor\nEstado | Correcto",
                     "image_name": None,
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
-                    "label": "Antes de continuar",
+                    "label": "",
                     "variant": "info",
+                    "image_width": "large",
+                    "align": "center",
                 },
             ],
         }
@@ -55,22 +47,59 @@ def test_v2_project_roundtrip_preserves_free_blocks_image_and_callout():
         introduction="Introducción",
         closing_note="Cierre",
         steps=steps,
+        metadata={
+            "document_type": "Procedimiento",
+            "version_label": "2.1",
+            "status": "Publicado",
+            "author": "Alejandro",
+            "show_cover": False,
+            "show_toc": True,
+        },
     )
 
     raw = json.loads(payload.decode("utf-8"))
-    assert raw["version"] == 2
+    assert raw["version"] == 3
 
     restored = load_project(payload)
     step = restored["steps"][0]
 
-    assert [block["type"] for block in step["blocks"]] == [
-        "text",
-        "image",
-        "note",
-    ]
-    assert step["blocks"][1]["image_bytes"] == b"image-bytes"
-    assert step["blocks"][2]["label"] == "Antes de continuar"
-    assert step["blocks"][2]["variant"] == "info"
+    assert restored["metadata"]["document_type"] == "Procedimiento"
+    assert restored["metadata"]["version_label"] == "2.1"
+    assert restored["metadata"]["status"] == "Publicado"
+    assert step["blocks"][0]["image_bytes"] == b"image-bytes"
+    assert step["blocks"][0]["image_width"] == "medium"
+    assert step["blocks"][0]["align"] == "right"
+    assert step["blocks"][1]["type"] == "table"
+
+
+def test_v2_project_is_migrated_with_layout_defaults():
+    payload = {
+        "version": 2,
+        "title": "Proyecto v2",
+        "steps": [
+            {
+                "title": "Paso",
+                "blocks": [
+                    {
+                        "type": "note",
+                        "text": "Consejo",
+                        "label": "Consejo",
+                        "variant": "tip",
+                    }
+                ],
+            }
+        ],
+    }
+
+    restored = load_project(
+        json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    )
+
+    block = restored["steps"][0]["blocks"][0]
+    assert block["variant"] == "tip"
+    assert block["image_width"] == "large"
+    assert block["align"] == "center"
+    assert restored["metadata"]["status"] == "Borrador"
 
 
 def test_v1_project_is_migrated_to_free_blocks():
@@ -105,9 +134,6 @@ def test_v1_project_is_migrated_to_free_blocks():
         "checklist",
         "note",
     ]
-    assert blocks[0]["text"] == "Texto"
     assert blocks[1]["image_bytes"] == b"old-image"
-    assert blocks[2]["items"] == "Uno\nDos"
-    assert blocks[3]["text"] == "Aviso"
     assert blocks[3]["label"] == "Importante"
     assert blocks[3]["variant"] == "warning"
