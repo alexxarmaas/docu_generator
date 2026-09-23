@@ -94,18 +94,14 @@ section h2 {
   gap: 20px;
 }
 
-.content-block {
-  margin: 0;
-}
+.content-block { margin: 0; }
 
 .text-block p {
   max-width: 780px;
   margin: 0 0 12px;
 }
 
-.text-block p:last-child {
-  margin-bottom: 0;
-}
+.text-block p:last-child { margin-bottom: 0; }
 
 .text-block ul,
 .checklist-block ul {
@@ -124,22 +120,42 @@ section h2 {
   background: var(--surface-soft);
 }
 
-.checklist-block li::marker {
-  color: var(--accent);
-}
+.checklist-block li::marker { color: var(--accent); }
 
-blockquote {
-  margin: 0;
-  padding: 14px 18px;
-  border: 0;
+.callout {
+  padding: 16px 18px;
   border-left: 4px solid var(--accent);
-  border-radius: 0 10px 10px 0;
-  background: #F0FBFA;
-  color: var(--primary-soft);
+  border-radius: 0 12px 12px 0;
 }
 
-blockquote p {
-  margin: 0;
+.callout p {
+  margin: 5px 0 0;
+}
+
+.callout-label {
+  display: block;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.callout-info {
+  background: #EEF6FC;
+  border-left-color: #4A90C2;
+}
+
+.callout-tip {
+  background: #F0FBFA;
+  border-left-color: var(--accent);
+}
+
+.callout-warning {
+  background: #FFF8E8;
+  border-left-color: #E2A72E;
+}
+
+.callout-success {
+  background: #EEF9F1;
+  border-left-color: #48A868;
 }
 
 figure {
