@@ -1,7 +1,12 @@
 import io
 import zipfile
 
-from docu_generator.models import GuideDraft, GuideSection, ReviewReport
+from docu_generator.models import (
+    GuideBlock,
+    GuideDraft,
+    GuideSection,
+    ReviewReport,
+)
 from docu_generator.services.exporter import (
     build_export_zip,
     render_html,
@@ -16,11 +21,22 @@ def test_export_zip_contains_expected_files():
         sections=[
             GuideSection(
                 title="Primer paso",
-                body="Comprueba la pantalla.",
-                image_name="screen.png",
-                image_caption="Pantalla de revisión",
-                checklist=["Cantidad correcta", "Precio correcto"],
-                note="No confirmes todavía.",
+                blocks=[
+                    GuideBlock(type="text", text="Comprueba la pantalla."),
+                    GuideBlock(
+                        type="image",
+                        image_name="screen.png",
+                        image_caption="Pantalla de revisión",
+                    ),
+                    GuideBlock(
+                        type="checklist",
+                        items=["Cantidad correcta", "Precio correcto"],
+                    ),
+                    GuideBlock(
+                        type="note",
+                        text="No confirmes todavía.",
+                    ),
+                ],
             )
         ],
     )
@@ -49,33 +65,58 @@ def test_export_zip_contains_expected_files():
     assert "images/screen.png" in names
 
 
-def test_markdown_contains_checklist_note_and_caption():
+def test_markdown_preserves_block_order():
     guide = GuideDraft(
         title="Guía",
         sections=[
             GuideSection(
                 title="Revisar",
-                body="Comprueba los datos.",
-                image_name="screen.png",
-                image_caption="Vista de revisión",
-                checklist=["Cantidad correcta", "Precio correcto"],
-                note="Revisa antes de continuar.",
+                blocks=[
+                    GuideBlock(type="text", text="Primero revisa los datos."),
+                    GuideBlock(
+                        type="image",
+                        image_name="screen.png",
+                        image_caption="Vista de revisión",
+                    ),
+                    GuideBlock(type="note", text="No continúes todavía."),
+                    GuideBlock(
+                        type="checklist",
+                        items=["Cantidad correcta", "Precio correcto"],
+                    ),
+                    GuideBlock(type="divider"),
+                    GuideBlock(type="text", text="Después continúa."),
+                ],
             )
         ],
     )
 
     text = render_markdown(guide, ReviewReport())
 
-    assert "- [ ] Cantidad correcta" in text
-    assert "- [ ] Precio correcto" in text
-    assert "> Revisa antes de continuar." in text
+    positions = [
+        text.index("Primero revisa los datos."),
+        text.index("![Vista de revisión]"),
+        text.index("> No continúes todavía."),
+        text.index("- [ ] Cantidad correcta"),
+        text.index("---"),
+        text.index("Después continúa."),
+    ]
+
+    assert positions == sorted(positions)
     assert "*Vista de revisión*" in text
 
 
 def test_html_can_be_downloaded_standalone():
     guide = GuideDraft(
         title="Guía",
-        sections=[GuideSection(title="Paso", body="Contenido")],
+        sections=[
+            GuideSection(
+                title="Paso",
+                blocks=[
+                    GuideBlock(type="text", text="Contenido"),
+                    GuideBlock(type="note", text="Aviso"),
+                ],
+            )
+        ],
     )
     html = render_html(
         guide,
@@ -86,3 +127,24 @@ def test_html_can_be_downloaded_standalone():
 
     assert "<title>Guía</title>" in html
     assert "Contenido" in html
+    assert "Aviso" in html
+
+
+def test_legacy_sections_still_render():
+    guide = GuideDraft(
+        title="Legacy",
+        sections=[
+            GuideSection(
+                title="Paso antiguo",
+                body="Texto antiguo",
+                checklist=["Uno"],
+                note="Aviso antiguo",
+            )
+        ],
+    )
+
+    text = render_markdown(guide, ReviewReport())
+
+    assert "Texto antiguo" in text
+    assert "- [ ] Uno" in text
+    assert "> Aviso antiguo" in text
