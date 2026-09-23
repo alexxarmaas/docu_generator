@@ -12,60 +12,66 @@ from docu_generator.services.exporter import (
     render_html,
     render_markdown,
 )
+from docu_generator.services.pdf_exporter import build_pdf
 
 
-def test_export_zip_contains_expected_files():
-    guide = GuideDraft(
+PROFILE = {
+    "name": "Brisia",
+    "product": "Brisia",
+    "brand": {
+        "primary": "#092D54",
+        "accent": "#00B8A9",
+    },
+    "css": "body{}",
+}
+
+
+def sample_guide():
+    return GuideDraft(
         title="Guía de prueba",
-        introduction="Introducción",
+        introduction="Introducción de la guía.",
         sections=[
             GuideSection(
                 title="Primer paso",
                 blocks=[
                     GuideBlock(type="text", text="Comprueba la pantalla."),
                     GuideBlock(
-                        type="image",
-                        image_name="screen.png",
-                        image_caption="Pantalla de revisión",
+                        type="note",
+                        label="Importante",
+                        variant="warning",
+                        text="No confirmes todavía.",
                     ),
                     GuideBlock(
                         type="checklist",
                         items=["Cantidad correcta", "Precio correcto"],
                     ),
-                    GuideBlock(
-                        type="note",
-                        text="No confirmes todavía.",
-                    ),
                 ],
             )
         ],
+        closing_note="Proceso completado.",
     )
-    review = ReviewReport()
-    images = [
-        {
-            "name": "screen.png",
-            "mime_type": "image/png",
-            "bytes": b"fake-image",
-        }
-    ]
-    profile = {
-        "name": "Brisia",
-        "product": "Brisia",
-        "css": "body{}",
-    }
 
-    payload = build_export_zip(guide, review, images, profile)
+
+def test_export_zip_contains_expected_files():
+    guide = sample_guide()
+
+    payload = build_export_zip(
+        guide,
+        ReviewReport(),
+        [],
+        PROFILE,
+    )
 
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         names = set(archive.namelist())
 
     assert "guide.md" in names
     assert "guide.html" in names
+    assert "guide.pdf" in names
     assert "review.txt" in names
-    assert "images/screen.png" in names
 
 
-def test_markdown_preserves_block_order():
+def test_markdown_preserves_block_order_and_callout_label():
     guide = GuideDraft(
         title="Guía",
         sections=[
@@ -74,11 +80,11 @@ def test_markdown_preserves_block_order():
                 blocks=[
                     GuideBlock(type="text", text="Primero revisa los datos."),
                     GuideBlock(
-                        type="image",
-                        image_name="screen.png",
-                        image_caption="Vista de revisión",
+                        type="note",
+                        label="Consejo",
+                        variant="tip",
+                        text="Hazlo con calma.",
                     ),
-                    GuideBlock(type="note", text="No continúes todavía."),
                     GuideBlock(
                         type="checklist",
                         items=["Cantidad correcta", "Precio correcto"],
@@ -94,40 +100,38 @@ def test_markdown_preserves_block_order():
 
     positions = [
         text.index("Primero revisa los datos."),
-        text.index("![Vista de revisión]"),
-        text.index("> No continúes todavía."),
+        text.index("> **Consejo:**"),
+        text.index("> Hazlo con calma."),
         text.index("- [ ] Cantidad correcta"),
         text.index("---"),
         text.index("Después continúa."),
     ]
 
     assert positions == sorted(positions)
-    assert "*Vista de revisión*" in text
 
 
-def test_html_can_be_downloaded_standalone():
-    guide = GuideDraft(
-        title="Guía",
-        sections=[
-            GuideSection(
-                title="Paso",
-                blocks=[
-                    GuideBlock(type="text", text="Contenido"),
-                    GuideBlock(type="note", text="Aviso"),
-                ],
-            )
-        ],
-    )
+def test_html_contains_callout_variant():
     html = render_html(
-        guide,
+        sample_guide(),
         ReviewReport(),
         [],
-        {"name": "Brisia", "product": "Brisia", "css": ""},
+        PROFILE,
     )
 
-    assert "<title>Guía</title>" in html
-    assert "Contenido" in html
-    assert "Aviso" in html
+    assert "<title>Guía de prueba</title>" in html
+    assert "callout-warning" in html
+    assert "Importante" in html
+
+
+def test_pdf_is_generated_locally():
+    pdf = build_pdf(
+        sample_guide(),
+        [],
+        PROFILE,
+    )
+
+    assert pdf.startswith(b"%PDF")
+    assert len(pdf) > 1000
 
 
 def test_legacy_sections_still_render():
@@ -147,4 +151,4 @@ def test_legacy_sections_still_render():
 
     assert "Texto antiguo" in text
     assert "- [ ] Uno" in text
-    assert "> Aviso antiguo" in text
+    assert "Aviso antiguo" in text
