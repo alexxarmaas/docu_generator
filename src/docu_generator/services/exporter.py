@@ -29,7 +29,10 @@ def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
             lines.extend([f"> {section.note}", ""])
 
         if section.image_name:
-            lines.extend([f"![{section.title}](images/{section.image_name})", ""])
+            alt = section.image_caption or section.title
+            lines.extend([f"![{alt}](images/{section.image_name})", ""])
+            if section.image_caption:
+                lines.extend([f"*{section.image_caption}*", ""])
 
     if guide.closing_note:
         lines.extend(["---", "", guide.closing_note, ""])
@@ -67,6 +70,7 @@ def render_html(
                 "checklist": section.checklist,
                 "note": section.note,
                 "image_name": section.image_name,
+                "image_caption": section.image_caption,
                 "image_src": image_lookup.get(section.image_name or ""),
             }
         )
@@ -99,7 +103,12 @@ def build_export_zip(
             "review.txt",
             "\n".join(review.issues) if review.issues else "Sin avisos de revisión.\n",
         )
+
+        written_images: set[str] = set()
         for image in images:
+            if image["name"] in written_images:
+                continue
             archive.writestr(f"images/{image['name']}", image["bytes"])
+            written_images.add(image["name"])
 
     return buffer.getvalue()
