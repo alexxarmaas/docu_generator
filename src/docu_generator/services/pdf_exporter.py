@@ -15,6 +15,7 @@ from reportlab.platypus import (
     KeepTogether,
     ListFlowable,
     ListItem,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -89,21 +90,18 @@ def _text_flowables(text: str, body_style: ParagraphStyle):
                 clean = line.strip()
                 if not clean:
                     continue
-                item_text = clean[2:].strip()
                 items.append(
                     ListItem(
-                        Paragraph(_inline_markup(item_text), body_style),
+                        Paragraph(_inline_markup(clean[2:].strip()), body_style),
                         leftIndent=8,
                     )
                 )
-
             if items:
                 flowables.append(
                     ListFlowable(
                         items,
                         bulletType="bullet",
                         leftIndent=16,
-                        bulletFontName="Helvetica",
                     )
                 )
                 flowables.append(Spacer(1, 3 * mm))
@@ -118,7 +116,22 @@ def _text_flowables(text: str, body_style: ParagraphStyle):
     return flowables
 
 
-def _scaled_image(raw: bytes, max_width: float, max_height: float):
+def _image_max_width(document_width: float, size: str) -> float:
+    ratios = {
+        "small": 0.42,
+        "medium": 0.62,
+        "large": 0.84,
+        "full": 1.0,
+    }
+    return document_width * ratios.get(size, 0.84)
+
+
+def _scaled_image(
+    raw: bytes,
+    max_width: float,
+    max_height: float,
+    align: str = "center",
+):
     image = Image(io.BytesIO(raw))
     scale = min(
         max_width / image.imageWidth,
@@ -127,8 +140,53 @@ def _scaled_image(raw: bytes, max_width: float, max_height: float):
     )
     image.drawWidth = image.imageWidth * scale
     image.drawHeight = image.imageHeight * scale
-    image.hAlign = "CENTER"
+    image.hAlign = {
+        "left": "LEFT",
+        "center": "CENTER",
+        "right": "RIGHT",
+    }.get(align, "CENTER")
     return image
+
+
+def _table_flowable(rows: list[str], width: float, primary, border):
+    parsed = [
+        [cell.strip() for cell in row.split("|")]
+        for row in rows
+        if row.strip()
+    ]
+    if not parsed:
+        return None
+
+    columns = max(len(row) for row in parsed)
+    normalized = [
+        row + [""] * (columns - len(row))
+        for row in parsed
+    ]
+    table = Table(
+        normalized,
+        colWidths=[width / columns] * columns,
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EEF3F6")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), primary),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("LEADING", (0, 0), (-1, -1), 11),
+                ("GRID", (0, 0), (-1, -1), 0.45, border),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return table
 
 
 def build_pdf(
@@ -138,16 +196,11 @@ def build_pdf(
 ) -> bytes:
     buffer = io.BytesIO()
 
-    primary = _hex(
-        profile.get("brand", {}).get("primary"),
-        "#092D54",
-    )
-    accent = _hex(
-        profile.get("brand", {}).get("accent"),
-        "#00B8A9",
-    )
+    primary = _hex(profile.get("brand", {}).get("primary"), "#092D54")
+    accent = _hex(profile.get("brand", {}).get("accent"), "#00B8A9")
     text_color = colors.HexColor("#16324A")
     muted = colors.HexColor("#667A8A")
+    border = colors.HexColor("#DDE5EB")
 
     doc = SimpleDocTemplate(
         buffer,
@@ -157,7 +210,7 @@ def build_pdf(
         topMargin=18 * mm,
         bottomMargin=18 * mm,
         title=guide.title,
-        author=profile.get("name", "Docu Generator"),
+        author=guide.author or profile.get("name", "Docu Generator"),
     )
 
     styles = getSampleStyleSheet()
@@ -170,6 +223,25 @@ def build_pdf(
         leading=10,
         textColor=accent,
         spaceAfter=3 * mm,
+    )
+    cover_title_style = ParagraphStyle(
+        "CoverTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=30,
+        leading=36,
+        textColor=primary,
+        alignment=TA_CENTER,
+        spaceAfter=7 * mm,
+    )
+    cover_meta_style = ParagraphStyle(
+        "CoverMeta",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=11,
+        leading=17,
+        textColor=muted,
+        alignment=TA_CENTER,
     )
     title_style = ParagraphStyle(
         "GuideTitle",
@@ -199,6 +271,16 @@ def build_pdf(
         textColor=primary,
         spaceBefore=4 * mm,
         spaceAfter=5 * mm,
+    )
+    toc_style = ParagraphStyle(
+        "TOC",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=10.5,
+        leading=16,
+        textColor=text_color,
+        leftIndent=4 * mm,
+        spaceAfter=2 * mm,
     )
     body_style = ParagraphStyle(
         "Body",
@@ -242,11 +324,69 @@ def build_pdf(
 
     image_lookup = {image["name"]: image for image in images}
     story = []
-
     product_name = profile.get("product") or profile.get("name") or "Producto"
+
+    if guide.show_cover:
+        story.append(Spacer(1, 28 * mm))
+        story.append(
+            Paragraph(
+                html.escape(str(product_name)).upper(),
+                ParagraphStyle(
+                    "CoverProduct",
+                    parent=eyebrow_style,
+                    alignment=TA_CENTER,
+                    fontSize=10,
+                ),
+            )
+        )
+        story.append(Spacer(1, 7 * mm))
+        story.append(Paragraph(_inline_markup(guide.title), cover_title_style))
+        story.append(
+            Paragraph(
+                "<br/>".join(
+                    [
+                        html.escape(guide.document_type),
+                        f"Versión {html.escape(guide.version)}",
+                        html.escape(guide.status),
+                    ]
+                ),
+                cover_meta_style,
+            )
+        )
+
+        if guide.author:
+            story.append(Spacer(1, 8 * mm))
+            story.append(
+                Paragraph(
+                    f"Autor: {html.escape(guide.author)}",
+                    cover_meta_style,
+                )
+            )
+
+        if guide.updated_at:
+            story.append(
+                Paragraph(
+                    f"Actualizado: {html.escape(guide.updated_at)}",
+                    cover_meta_style,
+                )
+            )
+
+        story.append(PageBreak())
+
+    if guide.show_toc and guide.sections:
+        story.append(Paragraph("Contenido", title_style))
+        for index, section in enumerate(guide.sections, start=1):
+            story.append(
+                Paragraph(
+                    f"<b>{index}.</b> {_inline_markup(section.title)}",
+                    toc_style,
+                )
+            )
+        story.append(PageBreak())
+
     story.append(
         Paragraph(
-            f"{html.escape(str(product_name)).upper()} - GUIA DE USUARIO",
+            f"{html.escape(str(product_name)).upper()} - {html.escape(guide.document_type).upper()}",
             eyebrow_style,
         )
     )
@@ -268,7 +408,7 @@ def build_pdf(
         HRFlowable(
             width="100%",
             thickness=0.7,
-            color=colors.HexColor("#DDE5EB"),
+            color=border,
             spaceAfter=5 * mm,
         )
     )
@@ -295,22 +435,24 @@ def build_pdf(
         ]
 
         for block in _section_blocks(section):
+            if block.type == "pagebreak":
+                if section_story:
+                    story.append(KeepTogether(section_story))
+                    section_story = []
+                story.append(PageBreak())
+                continue
+
             if block.type == "text" and block.text:
                 section_story.extend(_text_flowables(block.text, body_style))
 
             elif block.type == "checklist" and block.items:
-                checklist_items = []
-                for item in block.items:
-                    checklist_items.append(
-                        ListItem(
-                            Paragraph(
-                                f"[ ] {_inline_markup(item)}",
-                                body_style,
-                            ),
-                            leftIndent=6,
-                        )
+                checklist_items = [
+                    ListItem(
+                        Paragraph(f"[ ] {_inline_markup(item)}", body_style),
+                        leftIndent=6,
                     )
-
+                    for item in block.items
+                ]
                 section_story.append(
                     ListFlowable(
                         checklist_items,
@@ -324,10 +466,7 @@ def build_pdf(
             elif block.type == "note" and block.text:
                 label = block.label or "Nota"
                 callout_content = [
-                    Paragraph(
-                        html.escape(label),
-                        callout_label_style,
-                    ),
+                    Paragraph(html.escape(label), callout_label_style),
                     Paragraph(
                         "<br/>".join(
                             _inline_markup(line)
@@ -337,11 +476,7 @@ def build_pdf(
                         callout_body_style,
                     ),
                 ]
-                table = Table(
-                    [[callout_content]],
-                    colWidths=[doc.width],
-                    hAlign="LEFT",
-                )
+                table = Table([[callout_content]], colWidths=[doc.width])
                 table.setStyle(
                     TableStyle(
                         [
@@ -358,11 +493,8 @@ def build_pdf(
                                 "BOX",
                                 (0, 0),
                                 (-1, -1),
-                                0.5,
-                                callout_borders.get(
-                                    block.variant,
-                                    accent,
-                                ),
+                                0.6,
+                                callout_borders.get(block.variant, accent),
                             ),
                             ("LEFTPADDING", (0, 0), (-1, -1), 10),
                             ("RIGHTPADDING", (0, 0), (-1, -1), 10),
@@ -381,17 +513,20 @@ def build_pdf(
                         section_story.append(
                             _scaled_image(
                                 image_data["bytes"],
-                                max_width=doc.width,
+                                max_width=_image_max_width(
+                                    doc.width,
+                                    block.image_width,
+                                ),
                                 max_height=95 * mm,
+                                align=block.align,
                             )
                         )
                         if block.image_caption:
-                            section_story.append(
-                                Paragraph(
-                                    html.escape(block.image_caption),
-                                    caption_style,
-                                )
+                            caption = Paragraph(
+                                html.escape(block.image_caption),
+                                caption_style,
                             )
+                            section_story.append(caption)
                         else:
                             section_story.append(Spacer(1, 3 * mm))
                     except Exception:
@@ -407,13 +542,25 @@ def build_pdf(
                     HRFlowable(
                         width="100%",
                         thickness=0.6,
-                        color=colors.HexColor("#DDE5EB"),
+                        color=border,
                         spaceBefore=1 * mm,
                         spaceAfter=4 * mm,
                     )
                 )
 
-        story.append(KeepTogether(section_story))
+            elif block.type == "table":
+                table = _table_flowable(
+                    block.items,
+                    doc.width,
+                    primary,
+                    border,
+                )
+                if table is not None:
+                    section_story.append(table)
+                    section_story.append(Spacer(1, 4 * mm))
+
+        if section_story:
+            story.append(KeepTogether(section_story))
 
         if section_index < len(guide.sections):
             story.append(Spacer(1, 3 * mm))
@@ -441,7 +588,7 @@ def build_pdf(
 
     def _footer(canvas, document):
         canvas.saveState()
-        canvas.setStrokeColor(colors.HexColor("#DDE5EB"))
+        canvas.setStrokeColor(border)
         canvas.setLineWidth(0.4)
         canvas.line(
             document.leftMargin,
@@ -454,12 +601,12 @@ def build_pdf(
         canvas.drawString(
             document.leftMargin,
             7 * mm,
-            f"Generado con Docu Generator - {profile.get('name', 'Perfil')}",
+            f"{product_name} · {guide.document_type} · v{guide.version}",
         )
         canvas.drawRightString(
             A4[0] - document.rightMargin,
             7 * mm,
-            f"Pagina {document.page}",
+            f"Página {document.page}",
         )
         canvas.restoreState()
 
