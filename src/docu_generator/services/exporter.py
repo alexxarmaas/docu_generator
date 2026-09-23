@@ -19,6 +19,15 @@ def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
 
     for index, section in enumerate(guide.sections, start=1):
         lines.extend([f"## {index}. {section.title}", "", section.body, ""])
+
+        if section.checklist:
+            lines.extend(["### Qué comprobar", ""])
+            lines.extend([f"- [ ] {item}" for item in section.checklist])
+            lines.append("")
+
+        if section.note:
+            lines.extend([f"> {section.note}", ""])
+
         if section.image_name:
             lines.extend([f"![{section.title}](images/{section.image_name})", ""])
 
@@ -55,6 +64,8 @@ def render_html(
             {
                 "title": section.title,
                 "body_html": markdown.markdown(section.body),
+                "checklist": section.checklist,
+                "note": section.note,
                 "image_name": section.image_name,
                 "image_src": image_lookup.get(section.image_name or ""),
             }
