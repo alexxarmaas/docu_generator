@@ -366,7 +366,7 @@ def build_pdf(
                             _scaled_image(
                                 image_data["bytes"],
                                 max_width=doc.width,
-                                max_height=120 * mm,
+                                max_height=95 * mm,
                             )
                         )
                         if block.image_caption:
