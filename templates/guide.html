@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ guide.title }}</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">{{ profile.product or profile.name }} · Guía de usuario</div>
+      <h1>{{ guide.title }}</h1>
+      {% if guide.introduction %}
+      <div>{{ intro_html | safe }}</div>
+      {% endif %}
+    </header>
+
+    {% for section in sections %}
+    <section>
+      <h2><span class="step-number">{{ loop.index }}</span>{{ section.title }}</h2>
+      <div>{{ section.body_html | safe }}</div>
+
+      {% if section.image_src %}
+      <figure>
+        <img src="{{ section.image_src }}" alt="{{ section.title }}">
+        <figcaption>{{ section.image_name }}</figcaption>
+      </figure>
+      {% endif %}
+    </section>
+    {% endfor %}
+
+    {% if guide.closing_note %}
+    <section>{{ closing_html | safe }}</section>
+    {% endif %}
+
+    {% if review.issues %}
+    <aside class="review">
+      <strong>Notas de revisión</strong>
+      <ul>
+        {% for issue in review.issues %}
+        <li>{{ issue }}</li>
+        {% endfor %}
+      </ul>
+    </aside>
+    {% endif %}
+
+    <footer>Generado con Docu Generator · Perfil {{ profile.name }}</footer>
+  </main>
+</body>
+</html>
