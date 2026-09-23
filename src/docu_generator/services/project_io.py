@@ -30,6 +30,7 @@ def dump_project(
 
     for step in steps:
         payload_blocks = []
+
         for block in step.get("blocks", []):
             payload_blocks.append(
                 {
@@ -40,6 +41,8 @@ def dump_project(
                     "image_caption": block.get("image_caption", ""),
                     "image_mime": block.get("image_mime"),
                     "image_base64": _encode_image(block.get("image_bytes")),
+                    "label": block.get("label", ""),
+                    "variant": block.get("variant", "info"),
                 }
             )
 
@@ -66,6 +69,7 @@ def _load_v2(payload: dict) -> list[dict]:
 
     for item in payload.get("steps", []):
         blocks = []
+
         for block in item.get("blocks", []):
             blocks.append(
                 {
@@ -77,6 +81,8 @@ def _load_v2(payload: dict) -> list[dict]:
                     "image_caption": block.get("image_caption", ""),
                     "image_bytes": _decode_image(block.get("image_base64")),
                     "image_mime": block.get("image_mime"),
+                    "label": block.get("label", ""),
+                    "variant": block.get("variant", "info"),
                 }
             )
 
@@ -109,10 +115,13 @@ def _load_v1(payload: dict) -> list[dict]:
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
+                    "label": "",
+                    "variant": "info",
                 }
             )
 
         image_bytes = _decode_image(item.get("image_base64"))
+
         if item.get("image_name") or image_bytes is not None:
             blocks.append(
                 {
@@ -124,6 +133,8 @@ def _load_v1(payload: dict) -> list[dict]:
                     "image_caption": item.get("image_caption", ""),
                     "image_bytes": image_bytes,
                     "image_mime": item.get("image_mime"),
+                    "label": "",
+                    "variant": "info",
                 }
             )
 
@@ -138,6 +149,8 @@ def _load_v1(payload: dict) -> list[dict]:
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
+                    "label": "",
+                    "variant": "info",
                 }
             )
 
@@ -152,6 +165,8 @@ def _load_v1(payload: dict) -> list[dict]:
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
+                    "label": "Importante",
+                    "variant": "warning",
                 }
             )
 
