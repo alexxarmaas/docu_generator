@@ -35,8 +35,11 @@
           </div>
 
           {% elif block.type == "note" %}
-          <div class="content-block note-block">
-            <blockquote>{{ block.text_html | safe }}</blockquote>
+          <div class="content-block callout callout-{{ block.variant }}">
+            {% if block.label %}
+            <strong class="callout-label">{{ block.label }}</strong>
+            {% endif %}
+            <div>{{ block.text_html | safe }}</div>
           </div>
 
           {% elif block.type == "image" and block.image_src %}
