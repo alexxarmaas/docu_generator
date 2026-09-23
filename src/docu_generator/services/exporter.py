@@ -216,6 +216,7 @@ def render_html(
                     "align": block.align,
                     "table_rows": table_rows,
                     "table_html": table_html,
+                    "raw_html": table_html,
                 }
             )
 
