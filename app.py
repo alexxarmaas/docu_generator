@@ -837,6 +837,24 @@ with st.sidebar:
         if st.session_state.last_saved_at:
             st.caption(f"Último guardado: {st.session_state.last_saved_at}")
 
+        if st.button("Publicar versión", use_container_width=True):
+            st.session_state.doc_status = "Publicado"
+            st.session_state.last_saved_at = datetime.now().strftime("%d/%m/%Y %H:%M")
+            payload = project_payload()
+            base_name = (
+                st.session_state.current_project_name.removesuffix(".docugen.json")
+                if st.session_state.current_project_name
+                else st.session_state.guide_title
+            )
+            path = save_project(
+                st.session_state.guide_title or "proyecto",
+                payload,
+                filename=base_name,
+            )
+            st.session_state.current_project_name = path.name
+            st.session_state.last_snapshot = payload
+            st.success(f"Versión {st.session_state.doc_version} publicada y archivada.")
+
     if st.button("＋ Añadir paso", use_container_width=True):
         prepare_mutation()
         st.session_state.steps.append(new_step())
