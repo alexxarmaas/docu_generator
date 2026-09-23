@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "docu-generator"
-version = "0.1.0"
-description = "Generate user guides from screenshots and structured prompts."
+version = "0.2.0"
+description = "Local-first block editor for user guides."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
     "PyYAML>=6.0",
     "Jinja2>=3.1",
     "markdown>=3.7",
+    "reportlab>=4.2",
 ]
 
 [project.optional-dependencies]
