@@ -12,6 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (
     HRFlowable,
     Image,
+    KeepTogether,
     ListFlowable,
     ListItem,
     Paragraph,
@@ -278,6 +279,12 @@ def build_pdf(
         "warning": colors.HexColor("#FFF8E8"),
         "success": colors.HexColor("#EEF9F1"),
     }
+    callout_borders = {
+        "info": colors.HexColor("#4A90C2"),
+        "tip": accent,
+        "warning": colors.HexColor("#E2A72E"),
+        "success": colors.HexColor("#48A868"),
+    }
 
     for section_index, section in enumerate(guide.sections, start=1):
         section_story = [
@@ -304,7 +311,7 @@ def build_pdf(
                         )
                     )
 
-                story.append(
+                section_story.append(
                     ListFlowable(
                         checklist_items,
                         bulletType="bullet",
@@ -347,7 +354,16 @@ def build_pdf(
                                     callout_backgrounds["info"],
                                 ),
                             ),
-                            ("BOX", (0, 0), (-1, -1), 0.5, accent),
+                            (
+                                "BOX",
+                                (0, 0),
+                                (-1, -1),
+                                0.5,
+                                callout_borders.get(
+                                    block.variant,
+                                    accent,
+                                ),
+                            ),
                             ("LEFTPADDING", (0, 0), (-1, -1), 10),
                             ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                             ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -362,7 +378,7 @@ def build_pdf(
                 image_data = image_lookup.get(block.image_name)
                 if image_data:
                     try:
-                        story.append(
+                        section_story.append(
                             _scaled_image(
                                 image_data["bytes"],
                                 max_width=doc.width,
@@ -370,7 +386,7 @@ def build_pdf(
                             )
                         )
                         if block.image_caption:
-                            story.append(
+                            section_story.append(
                                 Paragraph(
                                     html.escape(block.image_caption),
                                     caption_style,
@@ -379,7 +395,7 @@ def build_pdf(
                         else:
                             section_story.append(Spacer(1, 3 * mm))
                     except Exception:
-                        story.append(
+                        section_story.append(
                             Paragraph(
                                 "No se pudo renderizar esta imagen en el PDF.",
                                 caption_style,
@@ -387,7 +403,7 @@ def build_pdf(
                         )
 
             elif block.type == "divider":
-                story.append(
+                section_story.append(
                     HRFlowable(
                         width="100%",
                         thickness=0.6,
