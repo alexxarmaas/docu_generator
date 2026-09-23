@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 BlockType = Literal["text", "image", "checklist", "note", "divider"]
+CalloutVariant = Literal["info", "tip", "warning", "success"]
 
 
 class ScreenEvidence(BaseModel):
@@ -22,6 +23,8 @@ class GuideBlock(BaseModel):
     items: list[str] = Field(default_factory=list)
     image_name: str | None = None
     image_caption: str = ""
+    label: str = ""
+    variant: CalloutVariant = "info"
 
 
 class GuideSection(BaseModel):
