@@ -28,7 +28,7 @@
           {% elif block.type == "checklist" %}
           <div class="content-block checklist-block">
             <ul>
-              {% for item in block.items %}
+              {% for item in block["items"] %}
               <li>{{ item }}</li>
               {% endfor %}
             </ul>
