@@ -108,7 +108,7 @@ def test_html_contains_publishing_components():
     assert "callout-warning" in html
     assert 'class="cover"' in html
     assert 'class="toc"' in html
-    assert 'class="table-block"' in html
+    assert 'class="content-block table-block"' in html
     assert 'class="page-break"' in html
 
 
