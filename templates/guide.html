@@ -8,16 +8,42 @@
 </head>
 <body>
   <main>
-    <header>
-      <div class="eyebrow">{{ profile.product or profile.name }} · Guía de usuario</div>
+    {% if guide.show_cover %}
+    <div class="cover">
+      <div class="eyebrow">{{ profile.product or profile.name }}</div>
       <h1>{{ guide.title }}</h1>
+      <div class="cover-meta">
+        <div>{{ guide.document_type }}</div>
+        <div>Versión {{ guide.version }}</div>
+        <div>{{ guide.status }}</div>
+        {% if guide.author %}<div>Autor: {{ guide.author }}</div>{% endif %}
+        {% if guide.updated_at %}<div>Actualizado: {{ guide.updated_at }}</div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if guide.show_toc and sections %}
+    <nav class="toc">
+      <h2>Contenido</h2>
+      <ol>
+        {% for section in sections %}
+        <li><a href="#step-{{ loop.index }}">{{ section.title }}</a></li>
+        {% endfor %}
+      </ol>
+    </nav>
+    {% endif %}
+
+    <header>
+      <div class="eyebrow">{{ profile.product or profile.name }} · {{ guide.document_type }}</div>
+      <h1>{{ guide.title }}</h1>
+      <div class="document-meta">v{{ guide.version }} · {{ guide.status }}</div>
       {% if guide.introduction %}
       <div>{{ intro_html | safe }}</div>
       {% endif %}
     </header>
 
     {% for section in sections %}
-    <section>
+    <section id="step-{{ loop.index }}">
       <h2><span class="step-number">{{ loop.index }}</span>{{ section.title }}</h2>
 
       <div class="step-content">
@@ -43,7 +69,7 @@
           </div>
 
           {% elif block.type == "image" and block.image_src %}
-          <figure class="content-block image-block">
+          <figure class="content-block image-block image-{{ block.image_width }} align-{{ block.align }}">
             <img src="{{ block.image_src }}" alt="{{ block.image_caption or section.title }}">
             {% if block.image_caption %}
             <figcaption>{{ block.image_caption }}</figcaption>
@@ -52,6 +78,31 @@
 
           {% elif block.type == "divider" %}
           <div class="content-block divider-block"><hr></div>
+
+          {% elif block.type == "table" and block.table_rows %}
+          <div class="content-block table-block">
+            <table>
+              <thead>
+                <tr>
+                  {% for cell in block.table_rows[0] %}
+                  <th>{{ cell }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in block.table_rows[1:] %}
+                <tr>
+                  {% for cell in row %}
+                  <td>{{ cell }}</td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% elif block.type == "pagebreak" %}
+          <div class="page-break"></div>
           {% endif %}
         {% endfor %}
       </div>
@@ -73,7 +124,9 @@
     </aside>
     {% endif %}
 
-    <footer>Generado con Docu Generator · Perfil {{ profile.name }}</footer>
+    <footer>
+      {{ profile.product or profile.name }} · {{ guide.document_type }} · v{{ guide.version }}
+    </footer>
   </main>
 </body>
 </html>
