@@ -280,16 +280,16 @@ def build_pdf(
     }
 
     for section_index, section in enumerate(guide.sections, start=1):
-        story.append(
+        section_story = [
             Paragraph(
                 f"{section_index}. {_inline_markup(section.title)}",
                 step_style,
             )
-        )
+        ]
 
         for block in _section_blocks(section):
             if block.type == "text" and block.text:
-                story.extend(_text_flowables(block.text, body_style))
+                section_story.extend(_text_flowables(block.text, body_style))
 
             elif block.type == "checklist" and block.items:
                 checklist_items = []
@@ -312,7 +312,7 @@ def build_pdf(
                         bulletColor=accent,
                     )
                 )
-                story.append(Spacer(1, 4 * mm))
+                section_story.append(Spacer(1, 4 * mm))
 
             elif block.type == "note" and block.text:
                 label = block.label or "Nota"
@@ -355,8 +355,8 @@ def build_pdf(
                         ]
                     )
                 )
-                story.append(table)
-                story.append(Spacer(1, 4 * mm))
+                section_story.append(table)
+                section_story.append(Spacer(1, 4 * mm))
 
             elif block.type == "image" and block.image_name:
                 image_data = image_lookup.get(block.image_name)
@@ -377,7 +377,7 @@ def build_pdf(
                                 )
                             )
                         else:
-                            story.append(Spacer(1, 3 * mm))
+                            section_story.append(Spacer(1, 3 * mm))
                     except Exception:
                         story.append(
                             Paragraph(
@@ -396,6 +396,8 @@ def build_pdf(
                         spaceAfter=4 * mm,
                     )
                 )
+
+        story.append(KeepTogether(section_story))
 
         if section_index < len(guide.sections):
             story.append(Spacer(1, 3 * mm))
