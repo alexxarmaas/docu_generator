@@ -48,7 +48,10 @@
 
       <div class="step-content">
         {% for block in section.blocks %}
-          {% if block["type"] == "text" %}
+          {% if block["raw_html"] %}
+          {{ block["raw_html"] | safe }}
+
+          {% elif block["type"] == "text" %}
           <div class="content-block text-block">{{ block["text_html"] | safe }}</div>
 
           {% elif block["type"] == "checklist" %}
@@ -78,9 +81,6 @@
 
           {% elif block["type"] == "divider" %}
           <div class="content-block divider-block"><hr></div>
-
-          {% elif block["type"] == "table" and block["table_html"] %}
-          {{ block["table_html"] | safe }}
 
           {% elif block["type"] == "pagebreak" %}
           <div class="page-break"></div>
