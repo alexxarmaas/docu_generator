@@ -19,7 +19,25 @@
     {% for section in sections %}
     <section>
       <h2><span class="step-number">{{ loop.index }}</span>{{ section.title }}</h2>
+
+      {% if section.body_html %}
       <div>{{ section.body_html | safe }}</div>
+      {% endif %}
+
+      {% if section.checklist %}
+      <div class="checklist">
+        <strong>Qué comprobar</strong>
+        <ul>
+          {% for item in section.checklist %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if section.note %}
+      <blockquote>{{ section.note }}</blockquote>
+      {% endif %}
 
       {% if section.image_src %}
       <figure>
@@ -31,7 +49,7 @@
     {% endfor %}
 
     {% if guide.closing_note %}
-    <section>{{ closing_html | safe }}</section>
+    <section class="closing-note">{{ closing_html | safe }}</section>
     {% endif %}
 
     {% if review.issues %}
