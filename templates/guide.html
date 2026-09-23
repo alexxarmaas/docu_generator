@@ -79,27 +79,8 @@
           {% elif block["type"] == "divider" %}
           <div class="content-block divider-block"><hr></div>
 
-          {% elif block["type"] == "table" and block["table_rows"] %}
-          <div class="content-block table-block">
-            <table>
-              <thead>
-                <tr>
-                  {% for cell in block["table_rows"][0] %}
-                  <th>{{ cell }}</th>
-                  {% endfor %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in block["table_rows"][1:] %}
-                <tr>
-                  {% for cell in row %}
-                  <td>{{ cell }}</td>
-                  {% endfor %}
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+          {% elif block["type"] == "table" and block["table_html"] %}
+          {{ block["table_html"] | safe }}
 
           {% elif block["type"] == "pagebreak" %}
           <div class="page-break"></div>
