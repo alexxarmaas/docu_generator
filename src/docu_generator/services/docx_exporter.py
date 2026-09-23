@@ -89,7 +89,7 @@ def _add_callout(document: Document, label: str, text: str, variant: str, colors
     }
     borders = {
         "info": "4A90C2",
-        "tip": colors_map["accent"].replace("#", ""),
+        "tip": str(colors_map["accent"]),
         "warning": "E2A72E",
         "success": "48A868",
     }
