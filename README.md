@@ -1,33 +1,50 @@
 # Docu Generator
 
-Editor local-first para crear guías de usuario mediante pasos y bloques reutilizables.
+Workspace local-first para crear, versionar y publicar documentación de producto mediante pasos y bloques reutilizables.
 
-El objetivo es poder construir documentación visual de producto sin depender de una API. La IA puede añadirse como ayuda opcional, pero el flujo principal funciona completamente en local.
+La aplicación funciona sin API. La IA queda como una capacidad opcional del proyecto, no como dependencia del editor.
 
-## Funcionalidades
+## Estado actual
 
-- Editor de guías por pasos.
-- Bloques libres dentro de cada paso.
-- Bloques colapsables.
-- Reordenación, duplicado y eliminación.
-- Inserción de contenido entre bloques.
-- Imágenes con pie de foto.
-- Checklists.
-- Separadores.
-- Biblioteca de callouts reutilizables:
+Docu Generator incluye:
+
+- Editor por pasos.
+- Bloques libres y colapsables.
+- Texto, imágenes, checklists, tablas, avisos, separadores y saltos de página.
+- Presets reutilizables:
   - Consejo.
   - Importante.
   - Resultado esperado.
   - Antes de continuar.
-- Vista previa en tiempo real.
-- Guardar y abrir proyectos `.docugen.json`.
-- Compatibilidad automática con proyectos v1.
-- Exportación local a:
+- Reordenar, duplicar, borrar, copiar y mover bloques entre pasos.
+- Tamaño y alineación de imágenes.
+- Deshacer / rehacer.
+- Autosave local.
+- Recuperación automática de la última sesión.
+- Biblioteca local de proyectos.
+- Historial de versiones al guardar.
+- Plantillas completas:
+  - En blanco.
+  - Tutorial paso a paso.
+  - Procedimiento operativo.
+  - Resolución de problemas.
+  - Primeros pasos.
+- Metadatos:
+  - Tipo.
+  - Versión.
+  - Estado.
+  - Autor.
+  - Portada.
+  - Índice.
+- Validación antes de exportar.
+- Migración automática de proyectos v1 y v2 al formato v3.
+- Exportación a:
   - PDF.
+  - DOCX.
   - HTML autónomo.
   - Markdown.
-  - ZIP completo con PDF, HTML, Markdown e imágenes.
-- Perfil visual de Brisia.
+  - ZIP completo.
+  - Proyecto editable `.docugen.json`.
 
 ## Puesta en marcha
 
@@ -44,22 +61,44 @@ pip install -e .
 streamlit run app.py
 ```
 
-La aplicación estará disponible normalmente en:
+Normalmente se abrirá en:
 
 ```text
 http://localhost:8501
 ```
 
+## Workspace local
+
+Docu Generator crea automáticamente:
+
+```text
+~/DocuGenerator/
+├── autosave.docugen.json
+├── projects/
+└── versions/
+```
+
+El autosave permite recuperar la última sesión.
+
+Cada guardado manual en la biblioteca crea además una copia histórica en `versions/`.
+
 ## Modelo de documento
 
 ```text
-Guía
-├── Título
+Documento
+├── Metadatos
+│   ├── Tipo
+│   ├── Versión
+│   ├── Estado
+│   └── Autor
+├── Portada opcional
+├── Índice opcional
 ├── Introducción
 ├── Paso 1
 │   ├── Texto
 │   ├── Imagen
 │   ├── Consejo
+│   ├── Tabla
 │   ├── Checklist
 │   └── ...
 ├── Paso 2
@@ -67,32 +106,94 @@ Guía
 └── Cierre
 ```
 
-Los bloques pueden aparecer en cualquier orden y repetirse tantas veces como sea necesario.
+## Bloques
 
-## PDF
+### Texto
 
-La exportación PDF se genera localmente con ReportLab. No necesita navegador, servidor externo ni API.
+Admite Markdown básico.
 
-El PDF utiliza el mismo contenido de bloques que HTML y Markdown, incluyendo:
+### Imagen
 
-- Títulos de pasos.
-- Texto.
+Permite definir:
+
+- Pie de foto.
+- Tamaño pequeño, mediano, grande o ancho completo.
+- Alineación izquierda, centro o derecha.
+
+### Checklist
+
+Un elemento por línea.
+
+### Tabla
+
+Una fila por línea y columnas separadas por `|`.
+
+Ejemplo:
+
+```text
+Campo | Descripción | Ejemplo
+Proveedor | Proveedor del documento | ACME S.L.
+Fecha | Fecha del albarán | 23/09/2026
+```
+
+### Callouts
+
+- Información.
+- Consejo.
+- Advertencia.
+- Resultado esperado.
+
+### Salto de página
+
+Fuerza un salto en PDF, DOCX y modo impresión HTML.
+
+## Exportación
+
+### PDF
+
+Generación local con ReportLab.
+
+Incluye:
+
+- Portada.
+- Índice.
+- Metadatos.
+- Pasos.
 - Imágenes.
+- Tablas.
 - Checklists.
 - Callouts.
-- Separadores.
-- Pies de imagen.
-- Paginación.
+- Saltos de página.
+- Footer con versión y paginación.
 
-## Proyectos
+### DOCX
 
-El formato `.docugen.json` contiene el documento completo, incluidas las imágenes codificadas dentro del propio archivo.
+Generación local con `python-docx`.
 
-Esto permite guardar una guía, cerrar Docu Generator y continuar editándola posteriormente sin depender de archivos externos.
+Es editable posteriormente en Word o LibreOffice.
+
+### HTML
+
+Documento autónomo con imágenes embebidas.
+
+Incluye CSS de impresión.
+
+### ZIP
+
+Contiene:
+
+```text
+guide.pdf
+guide.docx
+guide.html
+guide.md
+review.txt
+images/
+```
 
 ## Perfil Brisia
 
-El diseño exportado utiliza actualmente el perfil:
+El primer perfil incluido es:
 
 ```text
 profiles/
@@ -101,11 +202,26 @@ profiles/
     └── style.css
 ```
 
-La arquitectura permite añadir otros perfiles sin cambiar el editor.
+Define identidad visual e instrucciones de producto.
+
+La arquitectura permite añadir nuevos perfiles sin modificar el editor.
+
+## Formato de proyecto
+
+El formato actual es **v3**.
+
+Los proyectos antiguos se migran automáticamente:
+
+```text
+v1 -> v3
+v2 -> v3
+```
+
+Las imágenes se almacenan dentro del propio JSON para que el archivo sea portable.
 
 ## Desarrollo
 
-La CI ejecuta:
+CI:
 
 ```text
 instalación
@@ -115,4 +231,4 @@ compileall
 pytest
 ```
 
-El proyecto mantiene compatibilidad con el pipeline de generación experimental, pero el editor local por bloques es el flujo principal.
+El editor local es el flujo principal. El pipeline experimental de IA permanece desacoplado y puede utilizarse más adelante como ayuda opcional.
