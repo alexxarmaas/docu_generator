@@ -9,13 +9,13 @@ from jinja2 import Template
 
 from docu_generator.config import PROJECT_ROOT
 from docu_generator.models import GuideBlock, GuideDraft, GuideSection, ReviewReport
+from docu_generator.services.pdf_exporter import build_pdf
 
 
 def _section_blocks(section: GuideSection) -> list[GuideBlock]:
     if section.blocks:
         return section.blocks
 
-    # Backward compatibility with guides created by the original pipeline.
     blocks: list[GuideBlock] = []
 
     if section.body:
@@ -23,7 +23,14 @@ def _section_blocks(section: GuideSection) -> list[GuideBlock]:
     if section.checklist:
         blocks.append(GuideBlock(type="checklist", items=section.checklist))
     if section.note:
-        blocks.append(GuideBlock(type="note", text=section.note))
+        blocks.append(
+            GuideBlock(
+                type="note",
+                text=section.note,
+                label="Importante",
+                variant="warning",
+            )
+        )
     if section.image_name:
         blocks.append(
             GuideBlock(
@@ -54,11 +61,13 @@ def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
                 lines.append("")
 
             elif block.type == "note" and block.text:
-                quoted = "\n".join(
+                label = block.label or "Nota"
+                lines.append(f"> **{label}:**")
+                lines.extend(
                     f"> {line}" if line else ">"
                     for line in block.text.splitlines()
                 )
-                lines.extend([quoted, ""])
+                lines.append("")
 
             elif block.type == "image" and block.image_name:
                 alt = block.image_caption or section.title
@@ -114,6 +123,8 @@ def render_html(
                     "image_name": block.image_name,
                     "image_caption": block.image_caption,
                     "image_src": image_lookup.get(block.image_name or ""),
+                    "label": block.label,
+                    "variant": block.variant,
                 }
             )
 
@@ -143,12 +154,14 @@ def build_export_zip(
 ) -> bytes:
     markdown_text = render_markdown(guide, review)
     html_text = render_html(guide, review, images, profile)
+    pdf_bytes = build_pdf(guide, images, profile)
 
     buffer = io.BytesIO()
 
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("guide.md", markdown_text)
         archive.writestr("guide.html", html_text)
+        archive.writestr("guide.pdf", pdf_bytes)
         archive.writestr(
             "review.txt",
             "\n".join(review.issues) if review.issues else "Sin avisos de revisión.\n",
