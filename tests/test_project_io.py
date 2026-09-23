@@ -1,18 +1,46 @@
+import base64
+import json
+
 from docu_generator.services.project_io import dump_project, load_project
 
 
-def test_project_roundtrip_preserves_text_and_image():
+def test_v2_project_roundtrip_preserves_free_blocks_and_image():
     steps = [
         {
-            "id": "ignored",
-            "title": "Selecciona el albarán",
-            "body": "Abre el documento que quieras revisar.",
-            "checklist": "Proveedor correcto\nFecha correcta",
-            "note": "No continúes si el documento no corresponde.",
-            "image_name": "listado.png",
-            "image_caption": "Listado de albaranes",
-            "image_bytes": b"image-bytes",
-            "image_mime": "image/png",
+            "id": "step-id",
+            "title": "Revisa el albarán",
+            "blocks": [
+                {
+                    "id": "text-id",
+                    "type": "text",
+                    "text": "Comprueba los datos principales.",
+                    "items": "",
+                    "image_name": None,
+                    "image_caption": "",
+                    "image_bytes": None,
+                    "image_mime": None,
+                },
+                {
+                    "id": "image-id",
+                    "type": "image",
+                    "text": "",
+                    "items": "",
+                    "image_name": "imagen.png",
+                    "image_caption": "Pantalla de revisión",
+                    "image_bytes": b"image-bytes",
+                    "image_mime": "image/png",
+                },
+                {
+                    "id": "check-id",
+                    "type": "checklist",
+                    "text": "",
+                    "items": "Proveedor correcto\nFecha correcta",
+                    "image_name": None,
+                    "image_caption": "",
+                    "image_bytes": None,
+                    "image_mime": None,
+                },
+            ],
         }
     ]
 
@@ -23,16 +51,58 @@ def test_project_roundtrip_preserves_text_and_image():
         steps=steps,
     )
 
+    raw = json.loads(payload.decode("utf-8"))
+    assert raw["version"] == 2
+
     restored = load_project(payload)
 
     assert restored["title"] == "Cómo revisar un albarán"
-    assert restored["introduction"] == "Introducción"
-    assert restored["closing_note"] == "Cierre"
     assert len(restored["steps"]) == 1
 
     step = restored["steps"][0]
-    assert step["title"] == "Selecciona el albarán"
-    assert step["image_name"] == "listado.png"
-    assert step["image_caption"] == "Listado de albaranes"
-    assert step["image_bytes"] == b"image-bytes"
-    assert step["image_mime"] == "image/png"
+    assert step["title"] == "Revisa el albarán"
+    assert [block["type"] for block in step["blocks"]] == [
+        "text",
+        "image",
+        "checklist",
+    ]
+    assert step["blocks"][1]["image_bytes"] == b"image-bytes"
+    assert step["blocks"][1]["image_caption"] == "Pantalla de revisión"
+
+
+def test_v1_project_is_migrated_to_free_blocks():
+    payload = {
+        "version": 1,
+        "title": "Proyecto antiguo",
+        "introduction": "",
+        "closing_note": "",
+        "steps": [
+            {
+                "title": "Paso antiguo",
+                "body": "Texto",
+                "checklist": "Uno\nDos",
+                "note": "Aviso",
+                "image_name": "old.png",
+                "image_caption": "Imagen antigua",
+                "image_mime": "image/png",
+                "image_base64": base64.b64encode(b"old-image").decode("ascii"),
+            }
+        ],
+    }
+
+    restored = load_project(
+        json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    )
+
+    blocks = restored["steps"][0]["blocks"]
+
+    assert [block["type"] for block in blocks] == [
+        "text",
+        "image",
+        "checklist",
+        "note",
+    ]
+    assert blocks[0]["text"] == "Texto"
+    assert blocks[1]["image_bytes"] == b"old-image"
+    assert blocks[2]["items"] == "Uno\nDos"
+    assert blocks[3]["text"] == "Aviso"
