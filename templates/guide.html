@@ -48,10 +48,10 @@
 
       <div class="step-content">
         {% for block in section.blocks %}
-          {% if block.type == "text" %}
-          <div class="content-block text-block">{{ block.text_html | safe }}</div>
+          {% if block["type"] == "text" %}
+          <div class="content-block text-block">{{ block["text_html"] | safe }}</div>
 
-          {% elif block.type == "checklist" %}
+          {% elif block["type"] == "checklist" %}
           <div class="content-block checklist-block">
             <ul>
               {% for item in block["items"] %}
@@ -60,37 +60,37 @@
             </ul>
           </div>
 
-          {% elif block.type == "note" %}
-          <div class="content-block callout callout-{{ block.variant }}">
-            {% if block.label %}
-            <strong class="callout-label">{{ block.label }}</strong>
+          {% elif block["type"] == "note" %}
+          <div class="content-block callout callout-{{ block["variant"] }}">
+            {% if block["label"] %}
+            <strong class="callout-label">{{ block["label"] }}</strong>
             {% endif %}
-            <div>{{ block.text_html | safe }}</div>
+            <div>{{ block["text_html"] | safe }}</div>
           </div>
 
-          {% elif block.type == "image" and block.image_src %}
-          <figure class="content-block image-block image-{{ block.image_width }} align-{{ block.align }}">
-            <img src="{{ block.image_src }}" alt="{{ block.image_caption or section.title }}">
-            {% if block.image_caption %}
-            <figcaption>{{ block.image_caption }}</figcaption>
+          {% elif block["type"] == "image" and block["image_src"] %}
+          <figure class="content-block image-block image-{{ block["image_width"] }} align-{{ block["align"] }}">
+            <img src="{{ block["image_src"] }}" alt="{{ block["image_caption"] or section.title }}">
+            {% if block["image_caption"] %}
+            <figcaption>{{ block["image_caption"] }}</figcaption>
             {% endif %}
           </figure>
 
-          {% elif block.type == "divider" %}
+          {% elif block["type"] == "divider" %}
           <div class="content-block divider-block"><hr></div>
 
-          {% elif block.type == "table" and block.table_rows %}
+          {% elif block["type"] == "table" and block["table_rows"] %}
           <div class="content-block table-block">
             <table>
               <thead>
                 <tr>
-                  {% for cell in block.table_rows[0] %}
+                  {% for cell in block["table_rows"][0] %}
                   <th>{{ cell }}</th>
                   {% endfor %}
                 </tr>
               </thead>
               <tbody>
-                {% for row in block.table_rows[1:] %}
+                {% for row in block["table_rows"][1:] %}
                 <tr>
                   {% for cell in row %}
                   <td>{{ cell }}</td>
@@ -101,7 +101,7 @@
             </table>
           </div>
 
-          {% elif block.type == "pagebreak" %}
+          {% elif block["type"] == "pagebreak" %}
           <div class="page-break"></div>
           {% endif %}
         {% endfor %}
