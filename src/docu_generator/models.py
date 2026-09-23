@@ -15,6 +15,8 @@ class GuideSection(BaseModel):
     title: str
     body: str
     image_name: str | None = None
+    checklist: list[str] = Field(default_factory=list)
+    note: str = ""
 
 
 class GuideDraft(BaseModel):
