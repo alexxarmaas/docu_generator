@@ -20,33 +20,38 @@
     <section>
       <h2><span class="step-number">{{ loop.index }}</span>{{ section.title }}</h2>
 
-      {% if section.body_html %}
-      <div>{{ section.body_html | safe }}</div>
-      {% endif %}
+      <div class="step-content">
+        {% for block in section.blocks %}
+          {% if block.type == "text" %}
+          <div class="content-block text-block">{{ block.text_html | safe }}</div>
 
-      {% if section.checklist %}
-      <div class="checklist">
-        <strong>Qué comprobar</strong>
-        <ul>
-          {% for item in section.checklist %}
-          <li>{{ item }}</li>
-          {% endfor %}
-        </ul>
+          {% elif block.type == "checklist" %}
+          <div class="content-block checklist-block">
+            <ul>
+              {% for item in block.items %}
+              <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          {% elif block.type == "note" %}
+          <div class="content-block note-block">
+            <blockquote>{{ block.text_html | safe }}</blockquote>
+          </div>
+
+          {% elif block.type == "image" and block.image_src %}
+          <figure class="content-block image-block">
+            <img src="{{ block.image_src }}" alt="{{ block.image_caption or section.title }}">
+            {% if block.image_caption %}
+            <figcaption>{{ block.image_caption }}</figcaption>
+            {% endif %}
+          </figure>
+
+          {% elif block.type == "divider" %}
+          <div class="content-block divider-block"><hr></div>
+          {% endif %}
+        {% endfor %}
       </div>
-      {% endif %}
-
-      {% if section.note %}
-      <blockquote>{{ section.note }}</blockquote>
-      {% endif %}
-
-      {% if section.image_src %}
-      <figure>
-        <img src="{{ section.image_src }}" alt="{{ section.image_caption or section.title }}">
-        {% if section.image_caption %}
-        <figcaption>{{ section.image_caption }}</figcaption>
-        {% endif %}
-      </figure>
-      {% endif %}
     </section>
     {% endfor %}
 
