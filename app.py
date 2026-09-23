@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 
 from docu_generator.config import load_profile
 from docu_generator.models import GuideDraft, GuideSection, ReviewReport
-from docu_generator.services.exporter import build_export_zip
+from docu_generator.services.exporter import (
+    build_export_zip,
+    render_html,
+    render_markdown,
+)
+from docu_generator.services.project_io import dump_project, load_project
 
 load_dotenv()
 
@@ -26,6 +31,7 @@ def new_step() -> dict:
         "checklist": "",
         "note": "",
         "image_name": None,
+        "image_caption": "",
         "image_bytes": None,
         "image_mime": None,
     }
@@ -42,6 +48,13 @@ def ensure_state() -> None:
         st.session_state.guide_closing = ""
 
 
+def reset_project() -> None:
+    st.session_state.guide_title = ""
+    st.session_state.guide_intro = ""
+    st.session_state.guide_closing = ""
+    st.session_state.steps = [new_step()]
+
+
 def move_step(index: int, offset: int) -> None:
     target = index + offset
     if target < 0 or target >= len(st.session_state.steps):
@@ -50,6 +63,22 @@ def move_step(index: int, offset: int) -> None:
         st.session_state.steps[target],
         st.session_state.steps[index],
     )
+
+
+def duplicate_step(index: int) -> None:
+    source = st.session_state.steps[index]
+    clone = {
+        "id": uuid4().hex,
+        "title": source["title"],
+        "body": source["body"],
+        "checklist": source["checklist"],
+        "note": source["note"],
+        "image_name": source["image_name"],
+        "image_caption": source.get("image_caption", ""),
+        "image_bytes": source["image_bytes"],
+        "image_mime": source["image_mime"],
+    }
+    st.session_state.steps.insert(index + 1, clone)
 
 
 def remove_step(index: int) -> None:
@@ -61,7 +90,7 @@ def remove_step(index: int) -> None:
 
 def build_guide() -> tuple[GuideDraft, list[dict]]:
     sections: list[GuideSection] = []
-    images: list[dict] = []
+    images_by_name: dict[str, dict] = {}
 
     for step in st.session_state.steps:
         title = step["title"].strip()
@@ -72,6 +101,7 @@ def build_guide() -> tuple[GuideDraft, list[dict]]:
             if item.strip()
         ]
         note = step["note"].strip()
+        image_caption = step.get("image_caption", "").strip()
 
         if not any((title, body, checklist, note, step["image_name"])):
             continue
@@ -83,16 +113,18 @@ def build_guide() -> tuple[GuideDraft, list[dict]]:
                 checklist=checklist,
                 note=note,
                 image_name=step["image_name"],
+                image_caption=image_caption,
             )
         )
 
         if step["image_name"] and step["image_bytes"] is not None:
-            images.append(
+            images_by_name.setdefault(
+                step["image_name"],
                 {
                     "name": step["image_name"],
                     "mime_type": step["image_mime"] or "image/png",
                     "bytes": step["image_bytes"],
-                }
+                },
             )
 
     guide = GuideDraft(
@@ -101,7 +133,7 @@ def build_guide() -> tuple[GuideDraft, list[dict]]:
         sections=sections,
         closing_note=st.session_state.guide_closing.strip(),
     )
-    return guide, images
+    return guide, list(images_by_name.values())
 
 
 ensure_state()
@@ -111,7 +143,38 @@ st.title("Docu Generator")
 st.caption("Editor local por bloques para crear guías de usuario sin depender de ninguna API.")
 
 with st.sidebar:
+    st.header("Proyecto")
+
+    project_upload = st.file_uploader(
+        "Abrir proyecto",
+        type=["json"],
+        help="Carga un proyecto .json guardado anteriormente con Docu Generator.",
+    )
+
+    load_col, new_col = st.columns(2)
+
+    if load_col.button(
+        "Abrir",
+        use_container_width=True,
+        disabled=project_upload is None,
+    ):
+        try:
+            project = load_project(project_upload.getvalue())
+            st.session_state.guide_title = project["title"]
+            st.session_state.guide_intro = project["introduction"]
+            st.session_state.guide_closing = project["closing_note"]
+            st.session_state.steps = project["steps"] or [new_step()]
+            st.rerun()
+        except Exception as exc:
+            st.error(f"No se pudo abrir el proyecto: {exc}")
+
+    if new_col.button("Nuevo", use_container_width=True):
+        reset_project()
+        st.rerun()
+
+    st.divider()
     st.header("Guía")
+
     st.text_input(
         "Título",
         key="guide_title",
@@ -146,14 +209,17 @@ with editor_col:
         step_number = index + 1
 
         with st.container(border=True):
-            top_left, top_actions = st.columns([4, 2])
+            top_left, top_actions = st.columns([3.5, 2.5])
             with top_left:
                 st.markdown(f"### Paso {step_number}")
+
             with top_actions:
-                up, down, delete = st.columns(3)
+                up, down, duplicate, delete = st.columns(4)
+
                 if up.button("↑", key=f"up_{step['id']}", disabled=index == 0):
                     move_step(index, -1)
                     st.rerun()
+
                 if down.button(
                     "↓",
                     key=f"down_{step['id']}",
@@ -161,7 +227,12 @@ with editor_col:
                 ):
                     move_step(index, 1)
                     st.rerun()
-                if delete.button("✕", key=f"delete_{step['id']}"):
+
+                if duplicate.button("⧉", key=f"duplicate_{step['id']}", help="Duplicar paso"):
+                    duplicate_step(index)
+                    st.rerun()
+
+                if delete.button("✕", key=f"delete_{step['id']}", help="Eliminar paso"):
                     remove_step(index)
                     st.rerun()
 
@@ -188,6 +259,7 @@ with editor_col:
                 type=["png", "jpg", "jpeg", "webp"],
                 key=f"image_{step['id']}",
             )
+
             if upload is not None:
                 step["image_name"] = upload.name
                 step["image_bytes"] = upload.getvalue()
@@ -196,11 +268,20 @@ with editor_col:
             if step["image_bytes"] is not None:
                 st.image(
                     step["image_bytes"],
-                    caption=step["image_name"],
+                    caption=step["image_caption"] or step["image_name"],
                     use_container_width=True,
                 )
+
+                step["image_caption"] = st.text_input(
+                    "Pie de imagen",
+                    value=step.get("image_caption", ""),
+                    key=f"image_caption_{step['id']}",
+                    placeholder="Ej. Selección del albarán desde el listado principal",
+                )
+
                 if st.button("Quitar imagen", key=f"remove_image_{step['id']}"):
                     step["image_name"] = None
+                    step["image_caption"] = ""
                     step["image_bytes"] = None
                     step["image_mime"] = None
                     st.rerun()
@@ -219,6 +300,7 @@ with editor_col:
                     ),
                     help="Cada línea se exportará como un elemento de comprobación.",
                 )
+
                 step["note"] = st.text_area(
                     "Aviso / nota",
                     value=step["note"],
@@ -257,12 +339,12 @@ with preview_col:
 
             if section.checklist:
                 st.markdown("**Qué comprobar**")
-                for item in section.checklist:
+                for item_index, item in enumerate(section.checklist):
                     st.checkbox(
                         item,
                         value=False,
                         disabled=True,
-                        key=f"preview_check_{number}_{item}",
+                        key=f"preview_check_{number}_{item_index}",
                     )
 
             if section.note:
@@ -271,6 +353,7 @@ with preview_col:
             if section.image_name and section.image_name in image_lookup:
                 st.image(
                     image_lookup[section.image_name]["bytes"],
+                    caption=section.image_caption or None,
                     use_container_width=True,
                 )
 
@@ -280,21 +363,62 @@ with preview_col:
         if guide.closing_note:
             st.info(guide.closing_note)
 
+    st.markdown("#### Guardar y exportar")
+
+    safe_name = "".join(
+        c if c.isalnum() or c in "-_" else "-"
+        for c in guide.title.lower()
+    ).strip("-") or "guia"
+
+    project_bytes = dump_project(
+        title=st.session_state.guide_title,
+        introduction=st.session_state.guide_intro,
+        closing_note=st.session_state.guide_closing,
+        steps=st.session_state.steps,
+    )
+
+    export_a, export_b = st.columns(2)
+
+    export_a.download_button(
+        "Guardar proyecto",
+        data=project_bytes,
+        file_name=f"{safe_name}.docugen.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
     if guide.sections:
-        export_bytes = build_export_zip(
+        html_text = render_html(guide, review, images, profile)
+        markdown_text = render_markdown(guide, review)
+        zip_bytes = build_export_zip(
             guide=guide,
             review=review,
             images=images,
             profile=profile,
         )
-        safe_name = "".join(
-            c if c.isalnum() or c in "-_" else "-"
-            for c in guide.title.lower()
+
+        export_b.download_button(
+            "HTML",
+            data=html_text.encode("utf-8"),
+            file_name=f"{safe_name}.html",
+            mime="text/html",
+            use_container_width=True,
         )
-        st.download_button(
-            "Descargar guía",
-            data=export_bytes,
-            file_name=f"{safe_name or 'guia'}.zip",
+
+        export_c, export_d = st.columns(2)
+
+        export_c.download_button(
+            "Markdown",
+            data=markdown_text.encode("utf-8"),
+            file_name=f"{safe_name}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+        export_d.download_button(
+            "ZIP completo",
+            data=zip_bytes,
+            file_name=f"{safe_name}.zip",
             mime="application/zip",
             type="primary",
             use_container_width=True,
