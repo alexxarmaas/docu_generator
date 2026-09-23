@@ -12,6 +12,7 @@ from docu_generator.services.exporter import (
     render_html,
     render_markdown,
 )
+from docu_generator.services.pdf_exporter import build_pdf
 from docu_generator.services.project_io import dump_project, load_project
 
 load_dotenv()
@@ -22,25 +23,72 @@ st.set_page_config(
     layout="wide",
 )
 
-BLOCK_LABELS = {
-    "text": "Texto",
-    "image": "Imagen",
-    "checklist": "Checklist",
-    "note": "Aviso",
-    "divider": "Separador",
+BLOCK_LIBRARY = {
+    "text": {
+        "label": "Texto",
+        "icon": "📝",
+        "type": "text",
+    },
+    "image": {
+        "label": "Imagen",
+        "icon": "🖼️",
+        "type": "image",
+    },
+    "checklist": {
+        "label": "Checklist",
+        "icon": "☑️",
+        "type": "checklist",
+    },
+    "tip": {
+        "label": "Consejo",
+        "icon": "💡",
+        "type": "note",
+        "variant": "tip",
+        "callout_label": "Consejo",
+    },
+    "warning": {
+        "label": "Importante",
+        "icon": "⚠️",
+        "type": "note",
+        "variant": "warning",
+        "callout_label": "Importante",
+    },
+    "success": {
+        "label": "Resultado esperado",
+        "icon": "✅",
+        "type": "note",
+        "variant": "success",
+        "callout_label": "Resultado esperado",
+    },
+    "continue": {
+        "label": "Antes de continuar",
+        "icon": "➡️",
+        "type": "note",
+        "variant": "info",
+        "callout_label": "Antes de continuar",
+    },
+    "divider": {
+        "label": "Separador",
+        "icon": "—",
+        "type": "divider",
+    },
 }
 
 
-def new_block(block_type: str = "text") -> dict:
+def new_block(preset: str = "text") -> dict:
+    config = BLOCK_LIBRARY.get(preset, BLOCK_LIBRARY["text"])
+
     return {
         "id": uuid4().hex,
-        "type": block_type,
+        "type": config["type"],
         "text": "",
         "items": "",
         "image_name": None,
         "image_caption": "",
         "image_bytes": None,
         "image_mime": None,
+        "label": config.get("callout_label", ""),
+        "variant": config.get("variant", "info"),
     }
 
 
@@ -54,6 +102,8 @@ def clone_block(block: dict) -> dict:
         "image_caption": block.get("image_caption", ""),
         "image_bytes": block.get("image_bytes"),
         "image_mime": block.get("image_mime"),
+        "label": block.get("label", ""),
+        "variant": block.get("variant", "info"),
     }
 
 
@@ -107,8 +157,8 @@ def remove_step(index: int) -> None:
     st.session_state.steps.pop(index)
 
 
-def add_block(step: dict, block_type: str) -> None:
-    step.setdefault("blocks", []).append(new_block(block_type))
+def insert_block(step: dict, index: int, preset: str) -> None:
+    step.setdefault("blocks", []).insert(index, new_block(preset))
 
 
 def duplicate_block(step: dict, index: int) -> None:
@@ -139,6 +189,51 @@ def block_has_content(block: dict) -> bool:
     return False
 
 
+def block_display(block: dict) -> tuple[str, str]:
+    block_type = block.get("type", "text")
+
+    if block_type == "text":
+        text = block.get("text", "").strip()
+        summary = text[:54] + ("..." if len(text) > 54 else "")
+        return "📝", summary or "Texto"
+
+    if block_type == "image":
+        return "🖼️", block.get("image_caption") or block.get("image_name") or "Imagen"
+
+    if block_type == "checklist":
+        count = len(
+            [line for line in block.get("items", "").splitlines() if line.strip()]
+        )
+        return "☑️", f"Checklist · {count} elemento(s)"
+
+    if block_type == "note":
+        variants = {
+            "tip": "💡",
+            "warning": "⚠️",
+            "success": "✅",
+            "info": "➡️",
+        }
+        return variants.get(block.get("variant"), "ℹ️"), block.get("label") or "Aviso"
+
+    return "—", "Separador"
+
+
+def render_insert_menu(step: dict, insert_index: int, key_prefix: str) -> None:
+    with st.popover("＋ Insertar debajo"):
+        st.caption("Bloques")
+        columns = st.columns(2)
+
+        for option_index, (preset, config) in enumerate(BLOCK_LIBRARY.items()):
+            with columns[option_index % 2]:
+                if st.button(
+                    f"{config['icon']} {config['label']}",
+                    key=f"{key_prefix}_{preset}",
+                    use_container_width=True,
+                ):
+                    insert_block(step, insert_index, preset)
+                    st.rerun()
+
+
 def build_guide() -> tuple[GuideDraft, list[dict]]:
     sections: list[GuideSection] = []
     images_by_name: dict[str, dict] = {}
@@ -159,7 +254,12 @@ def build_guide() -> tuple[GuideDraft, list[dict]]:
 
             elif block_type == "note":
                 guide_blocks.append(
-                    GuideBlock(type="note", text=block.get("text", "").strip())
+                    GuideBlock(
+                        type="note",
+                        text=block.get("text", "").strip(),
+                        label=block.get("label", "").strip(),
+                        variant=block.get("variant", "info"),
+                    )
                 )
 
             elif block_type == "checklist":
@@ -214,12 +314,25 @@ def build_guide() -> tuple[GuideDraft, list[dict]]:
     return guide, list(images_by_name.values())
 
 
-def render_preview_block(block: GuideBlock, image_lookup: dict[str, dict], key_prefix: str) -> None:
+def render_preview_block(
+    block: GuideBlock,
+    image_lookup: dict[str, dict],
+    key_prefix: str,
+) -> None:
     if block.type == "text":
         st.markdown(block.text)
 
     elif block.type == "note":
-        st.info(block.text)
+        message = block.text
+        if block.label:
+            message = f"**{block.label}**\n\n{message}"
+
+        if block.variant == "warning":
+            st.warning(message)
+        elif block.variant in {"tip", "success"}:
+            st.success(message)
+        else:
+            st.info(message)
 
     elif block.type == "checklist":
         for item_index, item in enumerate(block.items):
@@ -242,96 +355,119 @@ def render_preview_block(block: GuideBlock, image_lookup: dict[str, dict], key_p
 
 
 def render_block_editor(step: dict, block: dict, block_index: int) -> None:
-    block_type = block.get("type", "text")
-    label = BLOCK_LABELS.get(block_type, block_type)
+    icon, display = block_display(block)
+    expanded = not block_has_content(block)
 
-    with st.container(border=True):
-        header, actions = st.columns([3.4, 2.6])
+    with st.expander(
+        f"{icon} {block_index + 1}. {display}",
+        expanded=expanded,
+    ):
+        actions = st.columns([1, 1, 1, 1, 4])
 
-        with header:
-            st.caption(f"{block_index + 1}. {label}")
+        if actions[0].button(
+            "↑",
+            key=f"block_up_{block['id']}",
+            disabled=block_index == 0,
+            help="Mover bloque arriba",
+        ):
+            move_item(step["blocks"], block_index, -1)
+            st.rerun()
 
-        with actions:
-            up, down, duplicate, delete = st.columns(4)
+        if actions[1].button(
+            "↓",
+            key=f"block_down_{block['id']}",
+            disabled=block_index == len(step["blocks"]) - 1,
+            help="Mover bloque abajo",
+        ):
+            move_item(step["blocks"], block_index, 1)
+            st.rerun()
 
-            if up.button(
-                "↑",
-                key=f"block_up_{block['id']}",
-                disabled=block_index == 0,
-                help="Mover bloque arriba",
-            ):
-                move_item(step["blocks"], block_index, -1)
-                st.rerun()
+        if actions[2].button(
+            "⧉",
+            key=f"block_duplicate_{block['id']}",
+            help="Duplicar bloque",
+        ):
+            duplicate_block(step, block_index)
+            st.rerun()
 
-            if down.button(
-                "↓",
-                key=f"block_down_{block['id']}",
-                disabled=block_index == len(step["blocks"]) - 1,
-                help="Mover bloque abajo",
-            ):
-                move_item(step["blocks"], block_index, 1)
-                st.rerun()
+        if actions[3].button(
+            "✕",
+            key=f"block_delete_{block['id']}",
+            help="Eliminar bloque",
+        ):
+            remove_block(step, block_index)
+            st.rerun()
 
-            if duplicate.button(
-                "⧉",
-                key=f"block_duplicate_{block['id']}",
-                help="Duplicar bloque",
-            ):
-                duplicate_block(step, block_index)
-                st.rerun()
-
-            if delete.button(
-                "✕",
-                key=f"block_delete_{block['id']}",
-                help="Eliminar bloque",
-            ):
-                remove_block(step, block_index)
-                st.rerun()
+        block_type = block.get("type", "text")
 
         if block_type == "text":
             block["text"] = st.text_area(
                 "Texto",
                 value=block.get("text", ""),
                 key=f"block_text_{block['id']}",
-                height=120,
+                height=130,
                 placeholder="Escribe la explicación. Puedes utilizar Markdown.",
-                label_visibility="collapsed",
             )
 
         elif block_type == "note":
+            meta_a, meta_b = st.columns([1.2, 1])
+
+            block["label"] = meta_a.text_input(
+                "Etiqueta",
+                value=block.get("label", ""),
+                key=f"block_label_{block['id']}",
+                placeholder="Ej. Importante",
+            )
+
+            variant_options = ["info", "tip", "warning", "success"]
+            variant_labels = {
+                "info": "Información",
+                "tip": "Consejo",
+                "warning": "Advertencia",
+                "success": "Correcto / resultado",
+            }
+            current_variant = block.get("variant", "info")
+            if current_variant not in variant_options:
+                current_variant = "info"
+
+            block["variant"] = meta_b.selectbox(
+                "Estilo",
+                variant_options,
+                index=variant_options.index(current_variant),
+                format_func=lambda value: variant_labels[value],
+                key=f"block_variant_{block['id']}",
+            )
+
             block["text"] = st.text_area(
-                "Aviso",
+                "Contenido",
                 value=block.get("text", ""),
                 key=f"block_note_{block['id']}",
-                height=90,
-                placeholder="Ej. No confirmes hasta comprobar todos los datos.",
-                label_visibility="collapsed",
+                height=100,
+                placeholder="Escribe el contenido del aviso.",
             )
 
         elif block_type == "checklist":
             block["items"] = st.text_area(
-                "Checklist",
+                "Elementos",
                 value=block.get("items", ""),
                 key=f"block_checklist_{block['id']}",
-                height=110,
+                height=120,
                 placeholder=(
                     "Un elemento por línea\n"
                     "Proveedor correcto\n"
                     "Fecha correcta\n"
                     "Importes correctos"
                 ),
-                label_visibility="collapsed",
             )
 
         elif block_type == "divider":
-            st.caption("Este bloque insertará una línea separadora.")
+            st.caption("Este bloque inserta una línea separadora.")
 
         elif block_type == "image":
             upload = st.file_uploader(
                 "Imagen",
                 type=["png", "jpg", "jpeg", "webp"],
                 key=f"block_image_{block['id']}",
-                label_visibility="collapsed",
             )
 
             if upload is not None:
@@ -343,7 +479,7 @@ def render_block_editor(step: dict, block: dict, block_index: int) -> None:
             if block.get("image_bytes") is not None:
                 st.image(
                     block["image_bytes"],
-                    caption=block.get("image_caption") or "Vista previa de imagen",
+                    caption=block.get("image_caption") or "Vista previa",
                     use_container_width=True,
                 )
 
@@ -363,6 +499,12 @@ def render_block_editor(step: dict, block: dict, block_index: int) -> None:
                     block["image_bytes"] = None
                     block["image_mime"] = None
                     st.rerun()
+
+    render_insert_menu(
+        step,
+        block_index + 1,
+        key_prefix=f"insert_after_{block['id']}",
+    )
 
 
 ensure_state()
@@ -487,33 +629,22 @@ with editor_col:
                 placeholder="Ej. Revisa las líneas del albarán",
             )
 
-            st.caption("Contenido")
-
             for block_index, block in enumerate(step.get("blocks", [])):
                 render_block_editor(step, block, block_index)
 
-            st.caption("Añadir bloque")
-            add_text, add_image, add_check, add_note, add_divider = st.columns(5)
+            with st.popover("＋ Añadir bloque al final", use_container_width=True):
+                st.caption("Biblioteca de bloques")
+                columns = st.columns(2)
 
-            if add_text.button("＋ Texto", key=f"add_text_{step['id']}", use_container_width=True):
-                add_block(step, "text")
-                st.rerun()
-
-            if add_image.button("＋ Imagen", key=f"add_image_{step['id']}", use_container_width=True):
-                add_block(step, "image")
-                st.rerun()
-
-            if add_check.button("＋ Lista", key=f"add_check_{step['id']}", use_container_width=True):
-                add_block(step, "checklist")
-                st.rerun()
-
-            if add_note.button("＋ Aviso", key=f"add_note_{step['id']}", use_container_width=True):
-                add_block(step, "note")
-                st.rerun()
-
-            if add_divider.button("＋ Línea", key=f"add_divider_{step['id']}", use_container_width=True):
-                add_block(step, "divider")
-                st.rerun()
+                for option_index, (preset, config) in enumerate(BLOCK_LIBRARY.items()):
+                    with columns[option_index % 2]:
+                        if st.button(
+                            f"{config['icon']} {config['label']}",
+                            key=f"add_end_{step['id']}_{preset}",
+                            use_container_width=True,
+                        ):
+                            insert_block(step, len(step["blocks"]), preset)
+                            st.rerun()
 
     if st.button("＋ Añadir otro paso", use_container_width=True):
         st.session_state.steps.append(new_step())
@@ -580,6 +711,7 @@ with preview_col:
     if guide.sections:
         html_text = render_html(guide, review, images, profile)
         markdown_text = render_markdown(guide, review)
+        pdf_bytes = build_pdf(guide, images, profile)
         zip_bytes = build_export_zip(
             guide=guide,
             review=review,
@@ -588,6 +720,17 @@ with preview_col:
         )
 
         export_b.download_button(
+            "PDF",
+            data=pdf_bytes,
+            file_name=f"{safe_name}.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+        )
+
+        export_c, export_d = st.columns(2)
+
+        export_c.download_button(
             "HTML",
             data=html_text.encode("utf-8"),
             file_name=f"{safe_name}.html",
@@ -595,9 +738,7 @@ with preview_col:
             use_container_width=True,
         )
 
-        export_c, export_d = st.columns(2)
-
-        export_c.download_button(
+        export_d.download_button(
             "Markdown",
             data=markdown_text.encode("utf-8"),
             file_name=f"{safe_name}.md",
@@ -605,11 +746,10 @@ with preview_col:
             use_container_width=True,
         )
 
-        export_d.download_button(
+        st.download_button(
             "ZIP completo",
             data=zip_bytes,
             file_name=f"{safe_name}.zip",
             mime="application/zip",
-            type="primary",
             use_container_width=True,
         )
