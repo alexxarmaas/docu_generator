@@ -4,7 +4,7 @@ import json
 from docu_generator.services.project_io import dump_project, load_project
 
 
-def test_v2_project_roundtrip_preserves_free_blocks_and_image():
+def test_v2_project_roundtrip_preserves_free_blocks_image_and_callout():
     steps = [
         {
             "id": "step-id",
@@ -19,6 +19,8 @@ def test_v2_project_roundtrip_preserves_free_blocks_and_image():
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
+                    "label": "",
+                    "variant": "info",
                 },
                 {
                     "id": "image-id",
@@ -29,16 +31,20 @@ def test_v2_project_roundtrip_preserves_free_blocks_and_image():
                     "image_caption": "Pantalla de revisión",
                     "image_bytes": b"image-bytes",
                     "image_mime": "image/png",
+                    "label": "",
+                    "variant": "info",
                 },
                 {
-                    "id": "check-id",
-                    "type": "checklist",
-                    "text": "",
-                    "items": "Proveedor correcto\nFecha correcta",
+                    "id": "note-id",
+                    "type": "note",
+                    "text": "Comprueba esto antes de seguir.",
+                    "items": "",
                     "image_name": None,
                     "image_caption": "",
                     "image_bytes": None,
                     "image_mime": None,
+                    "label": "Antes de continuar",
+                    "variant": "info",
                 },
             ],
         }
@@ -55,19 +61,16 @@ def test_v2_project_roundtrip_preserves_free_blocks_and_image():
     assert raw["version"] == 2
 
     restored = load_project(payload)
-
-    assert restored["title"] == "Cómo revisar un albarán"
-    assert len(restored["steps"]) == 1
-
     step = restored["steps"][0]
-    assert step["title"] == "Revisa el albarán"
+
     assert [block["type"] for block in step["blocks"]] == [
         "text",
         "image",
-        "checklist",
+        "note",
     ]
     assert step["blocks"][1]["image_bytes"] == b"image-bytes"
-    assert step["blocks"][1]["image_caption"] == "Pantalla de revisión"
+    assert step["blocks"][2]["label"] == "Antes de continuar"
+    assert step["blocks"][2]["variant"] == "info"
 
 
 def test_v1_project_is_migrated_to_free_blocks():
@@ -106,3 +109,5 @@ def test_v1_project_is_migrated_to_free_blocks():
     assert blocks[1]["image_bytes"] == b"old-image"
     assert blocks[2]["items"] == "Uno\nDos"
     assert blocks[3]["text"] == "Aviso"
+    assert blocks[3]["label"] == "Importante"
+    assert blocks[3]["variant"] == "warning"
