@@ -8,7 +8,32 @@ import markdown
 from jinja2 import Template
 
 from docu_generator.config import PROJECT_ROOT
-from docu_generator.models import GuideDraft, ReviewReport
+from docu_generator.models import GuideBlock, GuideDraft, GuideSection, ReviewReport
+
+
+def _section_blocks(section: GuideSection) -> list[GuideBlock]:
+    if section.blocks:
+        return section.blocks
+
+    # Backward compatibility with guides created by the original pipeline.
+    blocks: list[GuideBlock] = []
+
+    if section.body:
+        blocks.append(GuideBlock(type="text", text=section.body))
+    if section.checklist:
+        blocks.append(GuideBlock(type="checklist", items=section.checklist))
+    if section.note:
+        blocks.append(GuideBlock(type="note", text=section.note))
+    if section.image_name:
+        blocks.append(
+            GuideBlock(
+                type="image",
+                image_name=section.image_name,
+                image_caption=section.image_caption,
+            )
+        )
+
+    return blocks
 
 
 def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
@@ -18,21 +43,31 @@ def render_markdown(guide: GuideDraft, review: ReviewReport) -> str:
         lines.extend([guide.introduction, ""])
 
     for index, section in enumerate(guide.sections, start=1):
-        lines.extend([f"## {index}. {section.title}", "", section.body, ""])
+        lines.extend([f"## {index}. {section.title}", ""])
 
-        if section.checklist:
-            lines.extend(["### Qué comprobar", ""])
-            lines.extend([f"- [ ] {item}" for item in section.checklist])
-            lines.append("")
+        for block in _section_blocks(section):
+            if block.type == "text" and block.text:
+                lines.extend([block.text, ""])
 
-        if section.note:
-            lines.extend([f"> {section.note}", ""])
+            elif block.type == "checklist" and block.items:
+                lines.extend([f"- [ ] {item}" for item in block.items])
+                lines.append("")
 
-        if section.image_name:
-            alt = section.image_caption or section.title
-            lines.extend([f"![{alt}](images/{section.image_name})", ""])
-            if section.image_caption:
-                lines.extend([f"*{section.image_caption}*", ""])
+            elif block.type == "note" and block.text:
+                quoted = "\n".join(
+                    f"> {line}" if line else ">"
+                    for line in block.text.splitlines()
+                )
+                lines.extend([quoted, ""])
+
+            elif block.type == "image" and block.image_name:
+                alt = block.image_caption or section.title
+                lines.extend([f"![{alt}](images/{block.image_name})", ""])
+                if block.image_caption:
+                    lines.extend([f"*{block.image_caption}*", ""])
+
+            elif block.type == "divider":
+                lines.extend(["---", ""])
 
     if guide.closing_note:
         lines.extend(["---", "", guide.closing_note, ""])
@@ -62,16 +97,30 @@ def render_html(
         )
 
     sections = []
+
     for section in guide.sections:
+        rendered_blocks = []
+
+        for block in _section_blocks(section):
+            rendered_blocks.append(
+                {
+                    "type": block.type,
+                    "text_html": (
+                        markdown.markdown(block.text)
+                        if block.type in {"text", "note"} and block.text
+                        else ""
+                    ),
+                    "items": block.items,
+                    "image_name": block.image_name,
+                    "image_caption": block.image_caption,
+                    "image_src": image_lookup.get(block.image_name or ""),
+                }
+            )
+
         sections.append(
             {
                 "title": section.title,
-                "body_html": markdown.markdown(section.body),
-                "checklist": section.checklist,
-                "note": section.note,
-                "image_name": section.image_name,
-                "image_caption": section.image_caption,
-                "image_src": image_lookup.get(section.image_name or ""),
+                "blocks": rendered_blocks,
             }
         )
 
@@ -96,6 +145,7 @@ def build_export_zip(
     html_text = render_html(guide, review, images, profile)
 
     buffer = io.BytesIO()
+
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("guide.md", markdown_text)
         archive.writestr("guide.html", html_text)
@@ -105,9 +155,11 @@ def build_export_zip(
         )
 
         written_images: set[str] = set()
+
         for image in images:
             if image["name"] in written_images:
                 continue
+
             archive.writestr(f"images/{image['name']}", image["bytes"])
             written_images.add(image["name"])
 
