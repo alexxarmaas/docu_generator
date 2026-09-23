@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import io
 import zipfile
 
@@ -173,6 +174,30 @@ def render_html(
                     if row.strip()
                 ]
 
+            table_html = ""
+            if table_rows:
+                header_cells = "".join(
+                    f"<th>{html.escape(cell)}</th>"
+                    for cell in table_rows[0]
+                )
+                body_rows = "".join(
+                    "<tr>"
+                    + "".join(
+                        f"<td>{html.escape(cell)}</td>"
+                        for cell in row
+                    )
+                    + "</tr>"
+                    for row in table_rows[1:]
+                )
+                table_html = (
+                    '<div class="content-block table-block">'
+                    "<table><thead><tr>"
+                    + header_cells
+                    + "</tr></thead><tbody>"
+                    + body_rows
+                    + "</tbody></table></div>"
+                )
+
             rendered_blocks.append(
                 {
                     "type": block.type,
@@ -190,6 +215,7 @@ def render_html(
                     "image_width": block.image_width,
                     "align": block.align,
                     "table_rows": table_rows,
+                    "table_html": table_html,
                 }
             )
 
