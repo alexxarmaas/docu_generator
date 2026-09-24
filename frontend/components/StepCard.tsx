@@ -3,19 +3,12 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
-  CheckSquare2,
   Copy,
-  FileDown,
-  Image as ImageIcon,
   ListPlus,
-  MessageSquareText,
-  Minus,
-  Plus,
-  Table2,
   Trash2,
-  Type,
 } from "lucide-react";
-import type { Block, BlockType, Step } from "@/lib/types";
+import type { Block, Step } from "@/lib/types";
+import BlockCommandInput from "./BlockCommandInput";
 import SortableBlock from "./SortableBlock";
 
 type Props = {
@@ -27,19 +20,11 @@ type Props = {
   onAnnotate: (blockId: string) => void;
 };
 
-const BLOCK_OPTIONS: Array<{
-  type: BlockType;
-  label: string;
-  icon: typeof Type;
-}> = [
-  { type: "text", label: "Texto", icon: Type },
-  { type: "image", label: "Imagen", icon: ImageIcon },
-  { type: "checklist", label: "Checklist", icon: CheckSquare2 },
-  { type: "table", label: "Tabla", icon: Table2 },
-  { type: "note", label: "Aviso", icon: MessageSquareText },
-  { type: "divider", label: "Separador", icon: Minus },
-  { type: "pagebreak", label: "Salto", icon: FileDown },
-];
+type InsertPreset = {
+  type: Block["type"];
+  label?: string;
+  variant?: Block["variant"];
+};
 
 export default function StepCard({
   step,
@@ -86,25 +71,48 @@ export default function StepCard({
     onStepChange({ ...step, blocks });
   };
 
-  const addBlock = (type: BlockType) => {
+  const moveBlock = (blockId: string, offset: number) => {
+    const blockIndex = step.blocks.findIndex((block) => block.id === blockId);
+    const targetIndex = blockIndex + offset;
+
+    if (
+      blockIndex < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= step.blocks.length
+    ) {
+      return;
+    }
+
+    const blocks = [...step.blocks];
+    [blocks[blockIndex], blocks[targetIndex]] = [
+      blocks[targetIndex],
+      blocks[blockIndex],
+    ];
+    onStepChange({ ...step, blocks });
+  };
+
+  const addBlock = (preset: InsertPreset, index = step.blocks.length) => {
     const id = crypto.randomUUID().replaceAll("-", "");
     const block: Block = {
       id,
-      type,
+      type: preset.type,
       text: "",
       items: "",
       image_name: null,
       image_caption: "",
       image_mime: null,
       image_base64: null,
-      label: type === "note" ? "Consejo" : "",
-      variant: type === "note" ? "tip" : "info",
+      label: preset.label || (preset.type === "note" ? "Consejo" : ""),
+      variant: preset.variant || (preset.type === "note" ? "tip" : "info"),
       image_width: "large",
       align: "center",
       annotations: [],
       crop: null,
     };
-    onStepChange({ ...step, blocks: [...step.blocks, block] });
+
+    const blocks = [...step.blocks];
+    blocks.splice(index, 0, block);
+    onStepChange({ ...step, blocks });
   };
 
   return (
@@ -146,14 +154,19 @@ export default function StepCard({
           items={step.blocks.map((block) => block.id)}
           strategy={verticalListSortingStrategy}
         >
-          {step.blocks.map((block) => (
+          {step.blocks.map((block, blockIndex) => (
             <SortableBlock
               key={block.id}
               block={block}
               stepId={step.id}
+              canMoveUp={blockIndex > 0}
+              canMoveDown={blockIndex < step.blocks.length - 1}
               onUpdate={(patch) => patchBlock(block.id, patch)}
               onDelete={() => deleteBlock(block.id)}
               onDuplicate={() => duplicateBlock(block.id)}
+              onMoveUp={() => moveBlock(block.id, -1)}
+              onMoveDown={() => moveBlock(block.id, 1)}
+              onInsertAfter={(preset) => addBlock(preset, blockIndex + 1)}
               onAnnotate={() => onAnnotate(block.id)}
             />
           ))}
@@ -168,18 +181,7 @@ export default function StepCard({
         )}
       </div>
 
-      <div className="block-palette">
-        <div className="block-palette-label">
-          <Plus size={14} />
-          Añadir
-        </div>
-        {BLOCK_OPTIONS.map(({ type, label, icon: Icon }) => (
-          <button key={type} onClick={() => addBlock(type)} title={label}>
-            <Icon size={14} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      <BlockCommandInput onInsert={(preset) => addBlock(preset)} />
     </section>
   );
 }
