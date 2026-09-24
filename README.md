@@ -16,7 +16,7 @@ Next.js / React
 └── preview
         │
         ▼
-FastAPI local :8000
+FastAPI local :8787
 ├── proyectos / versiones
 ├── migración v1-v4
 ├── validación
@@ -48,7 +48,7 @@ La primera ejecución:
 1. crea `.venv` si no existe;
 2. instala/actualiza el backend Python;
 3. instala el frontend si falta `node_modules`;
-4. arranca FastAPI en `http://127.0.0.1:8000`;
+4. arranca FastAPI en `http://127.0.0.1:8787`;
 5. arranca Next.js en `http://localhost:3000`.
 
 Abre:
@@ -65,7 +65,7 @@ Backend:
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
-python -m uvicorn docu_generator.api:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn docu_generator.api:app --reload --host 127.0.0.1 --port 8787
 ```
 
 Frontend, en otra terminal:
@@ -254,7 +254,7 @@ POST /api/export/zip
 La documentación OpenAPI puede verse con el backend activo en:
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8787/docs
 ```
 
 ## Streamlit legacy
