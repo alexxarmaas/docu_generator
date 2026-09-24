@@ -3,38 +3,63 @@
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
 import {
+  ArrowDown,
+  ArrowUp,
   CheckSquare2,
   Copy,
   FileDown,
   GripVertical,
   Image as ImageIcon,
   MessageSquareText,
-  Minus,
+  MoreHorizontal,
   PencilRuler,
+  Plus,
   Table2,
   Trash2,
   Type,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { Block } from "@/lib/types";
-import { dataUrl } from "@/lib/project";
+import AnnotatedImagePreview from "./AnnotatedImagePreview";
+import BlockCommandInput from "./BlockCommandInput";
+
+type InsertPreset = {
+  type: Block["type"];
+  label?: string;
+  variant?: Block["variant"];
+};
 
 type Props = {
   block: Block;
   stepId: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onUpdate: (patch: Partial<Block>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onInsertAfter: (preset: InsertPreset) => void;
   onAnnotate: () => void;
 };
 
 export default function SortableBlock({
   block,
   stepId,
+  canMoveUp,
+  canMoveDown,
   onUpdate,
   onDelete,
   onDuplicate,
+  onMoveUp,
+  onMoveDown,
+  onInsertAfter,
   onAnnotate,
 }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const {
     attributes,
     listeners,
@@ -47,10 +72,24 @@ export default function SortableBlock({
     data: { type: "block", blockId: block.id, stepId },
   });
 
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+        setInsertOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [menuOpen]);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.28 : 1,
   };
 
   const loadImage = (file: File | undefined) => {
@@ -71,14 +110,17 @@ export default function SortableBlock({
     reader.readAsDataURL(file);
   };
 
-  const imageUrl = dataUrl(block);
   const Icon = iconForBlock(block);
 
   return (
     <article
       ref={setNodeRef}
       style={style}
-      className={`block-card block-${block.type}`}
+      className={`block-card block-${block.type} ${isDragging ? "is-dragging" : ""}`}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuOpen(true);
+      }}
     >
       <div className="block-head">
         <button
@@ -98,13 +140,76 @@ export default function SortableBlock({
           <span>{labelForBlock(block)}</span>
         </div>
 
-        <div className="block-actions">
-          <button onClick={onDuplicate} title="Duplicar bloque">
-            <Copy size={14} />
+        <div className="block-actions" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((value) => !value)}
+            title="Más acciones"
+            aria-expanded={menuOpen}
+          >
+            <MoreHorizontal size={15} />
           </button>
-          <button className="danger-hover" onClick={onDelete} title="Eliminar bloque">
-            <Trash2 size={14} />
-          </button>
+
+          {menuOpen && (
+            <div className="block-context-menu">
+              <button
+                onClick={() => {
+                  onMoveUp();
+                  setMenuOpen(false);
+                }}
+                disabled={!canMoveUp}
+              >
+                <ArrowUp size={14} />
+                Mover arriba
+              </button>
+              <button
+                onClick={() => {
+                  onMoveDown();
+                  setMenuOpen(false);
+                }}
+                disabled={!canMoveDown}
+              >
+                <ArrowDown size={14} />
+                Mover abajo
+              </button>
+              <button
+                onClick={() => {
+                  onDuplicate();
+                  setMenuOpen(false);
+                }}
+              >
+                <Copy size={14} />
+                Duplicar
+              </button>
+              <button onClick={() => setInsertOpen((value) => !value)}>
+                <Plus size={14} />
+                Insertar debajo
+              </button>
+
+              {insertOpen && (
+                <div className="context-insert">
+                  <BlockCommandInput
+                    onInsert={(preset) => {
+                      onInsertAfter(preset);
+                      setMenuOpen(false);
+                      setInsertOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="context-separator" />
+              <button
+                className="danger"
+                onClick={() => {
+                  onDelete();
+                  setMenuOpen(false);
+                }}
+              >
+                <Trash2 size={14} />
+                Eliminar bloque
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -175,7 +280,7 @@ export default function SortableBlock({
 
         {block.type === "image" && (
           <div className="image-editor">
-            {!imageUrl ? (
+            {!block.image_base64 ? (
               <label className="image-drop">
                 <span className="image-drop-icon">
                   <ImageIcon size={22} />
@@ -192,8 +297,7 @@ export default function SortableBlock({
             ) : (
               <>
                 <div className="image-preview-shell">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrl} alt={block.image_caption || "Captura"} />
+                  <AnnotatedImagePreview block={block} />
                   {(block.annotations.length > 0 || block.crop) && (
                     <span className="annotation-badge">
                       {block.annotations.length} anotación(es)
@@ -285,7 +389,7 @@ function iconForBlock(block: Block) {
   if (block.type === "image") return ImageIcon;
   if (block.type === "checklist") return CheckSquare2;
   if (block.type === "table") return Table2;
-  if (block.type === "divider") return Minus;
+  if (block.type === "divider") return GripVertical;
   if (block.type === "pagebreak") return FileDown;
   return MessageSquareText;
 }
