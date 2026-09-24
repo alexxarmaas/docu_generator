@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 output/
 .streamlit/
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
