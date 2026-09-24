@@ -2,11 +2,14 @@
 setlocal
 
 if not exist ".venv\Scripts\python.exe" (
-  echo [Docu Generator] No encuentro .venv. Ejecuta primero:
-  echo   python -m venv .venv
-  echo   .venv\Scripts\python -m pip install -e .
-  exit /b 1
+  echo [Docu Generator] Creando entorno Python...
+  python -m venv .venv
+  if errorlevel 1 exit /b 1
 )
+
+echo [Docu Generator] Actualizando backend...
+".venv\Scripts\python.exe" -m pip install -e .
+if errorlevel 1 exit /b 1
 
 if not exist "frontend\node_modules" (
   echo [Docu Generator] Instalando frontend...
