@@ -67,37 +67,28 @@ export default function AnnotatedImagePreview({ block, className = "" }: Props) 
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <defs>
-          <marker
-            id={`arrow-${block.id}`}
-            markerWidth="7"
-            markerHeight="7"
-            refX="5.2"
-            refY="3.5"
-            orient="auto"
-            markerUnits="strokeWidth"
-          >
-            <path d="M0,0 L0,7 L6,3.5 z" fill="context-stroke" />
-          </marker>
-        </defs>
-
         {block.annotations
           .filter((annotation) => annotation.type === "arrow")
           .map((annotation) => {
             const start = mapPoint(annotation.x, annotation.y, crop);
             const end = mapPoint(annotation.x2, annotation.y2, crop);
+            const head = arrowHead(start.x, start.y, end.x, end.y);
             return (
-              <line
-                key={annotation.id}
-                x1={start.x}
-                y1={start.y}
-                x2={end.x}
-                y2={end.y}
-                stroke={annotation.color}
-                strokeWidth="1.4"
-                vectorEffect="non-scaling-stroke"
-                markerEnd={`url(#arrow-${block.id})`}
-              />
+              <g key={annotation.id}>
+                <line
+                  x1={start.x}
+                  y1={start.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={annotation.color}
+                  strokeWidth="1.4"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <polygon
+                  points={head}
+                  fill={annotation.color}
+                />
+              </g>
             );
           })}
       </svg>
@@ -169,6 +160,19 @@ function OverlayAnnotation({
       }}
     />
   );
+}
+
+function arrowHead(x1: number, y1: number, x2: number, y2: number) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = 3.2;
+  const spread = Math.PI / 6;
+
+  const leftX = x2 - size * Math.cos(angle - spread);
+  const leftY = y2 - size * Math.sin(angle - spread);
+  const rightX = x2 - size * Math.cos(angle + spread);
+  const rightY = y2 - size * Math.sin(angle + spread);
+
+  return `${x2},${y2} ${leftX},${leftY} ${rightX},${rightY}`;
 }
 
 function mapPoint(x: number, y: number, crop: Crop) {
