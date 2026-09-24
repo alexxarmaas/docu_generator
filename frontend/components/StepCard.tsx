@@ -2,7 +2,19 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import {
+  CheckSquare2,
+  Copy,
+  FileDown,
+  Image as ImageIcon,
+  ListPlus,
+  MessageSquareText,
+  Minus,
+  Plus,
+  Table2,
+  Trash2,
+  Type,
+} from "lucide-react";
 import type { Block, BlockType, Step } from "@/lib/types";
 import SortableBlock from "./SortableBlock";
 
@@ -15,14 +27,18 @@ type Props = {
   onAnnotate: (blockId: string) => void;
 };
 
-const BLOCK_OPTIONS: Array<[BlockType, string]> = [
-  ["text", "Texto"],
-  ["image", "Imagen"],
-  ["checklist", "Checklist"],
-  ["table", "Tabla"],
-  ["note", "Aviso"],
-  ["divider", "Separador"],
-  ["pagebreak", "Salto de página"],
+const BLOCK_OPTIONS: Array<{
+  type: BlockType;
+  label: string;
+  icon: typeof Type;
+}> = [
+  { type: "text", label: "Texto", icon: Type },
+  { type: "image", label: "Imagen", icon: ImageIcon },
+  { type: "checklist", label: "Checklist", icon: CheckSquare2 },
+  { type: "table", label: "Tabla", icon: Table2 },
+  { type: "note", label: "Aviso", icon: MessageSquareText },
+  { type: "divider", label: "Separador", icon: Minus },
+  { type: "pagebreak", label: "Salto", icon: FileDown },
 ];
 
 export default function StepCard({
@@ -55,17 +71,18 @@ export default function StepCard({
   };
 
   const duplicateBlock = (blockId: string) => {
-    const index = step.blocks.findIndex((block) => block.id === blockId);
-    if (index < 0) return;
-    const source = step.blocks[index];
-    const clone = structuredClone(source);
+    const blockIndex = step.blocks.findIndex((block) => block.id === blockId);
+    if (blockIndex < 0) return;
+
+    const clone = structuredClone(step.blocks[blockIndex]);
     clone.id = crypto.randomUUID().replaceAll("-", "");
     clone.annotations = clone.annotations.map((annotation) => ({
       ...annotation,
       id: crypto.randomUUID().replaceAll("-", ""),
     }));
+
     const blocks = [...step.blocks];
-    blocks.splice(index + 1, 0, clone);
+    blocks.splice(blockIndex + 1, 0, clone);
     onStepChange({ ...step, blocks });
   };
 
@@ -93,21 +110,32 @@ export default function StepCard({
   return (
     <section className="step-card">
       <header className="step-header">
-        <div className="step-number">{index + 1}</div>
+        <div className="step-kicker">
+          <span className="step-number">{String(index + 1).padStart(2, "0")}</span>
+          <span>Paso</span>
+        </div>
+
         <input
           className="step-title"
           value={step.title}
           onChange={(event) =>
             onStepChange({ ...step, title: event.target.value })
           }
-          placeholder="Título del paso"
+          placeholder="Ponle un nombre claro a este paso…"
         />
-        <button className="icon-button" onClick={onDuplicate} title="Duplicar paso">
-          <Copy size={16} />
-        </button>
-        <button className="icon-button" onClick={onDelete} title="Eliminar paso">
-          <Trash2 size={16} />
-        </button>
+
+        <div className="step-actions">
+          <button className="icon-button" onClick={onDuplicate} title="Duplicar paso">
+            <Copy size={16} />
+          </button>
+          <button
+            className="icon-button danger-hover"
+            onClick={onDelete}
+            title="Eliminar paso"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </header>
 
       <div
@@ -132,15 +160,23 @@ export default function StepCard({
         </SortableContext>
 
         {step.blocks.length === 0 && (
-          <div className="empty-drop">Arrastra un bloque aquí</div>
+          <div className="empty-drop">
+            <ListPlus size={22} />
+            <strong>Este paso está vacío</strong>
+            <span>Añade un bloque o arrastra uno desde otro paso.</span>
+          </div>
         )}
       </div>
 
-      <div className="add-block-row">
-        <Plus size={15} />
-        {BLOCK_OPTIONS.map(([type, label]) => (
-          <button key={type} onClick={() => addBlock(type)}>
-            {label}
+      <div className="block-palette">
+        <div className="block-palette-label">
+          <Plus size={14} />
+          Añadir
+        </div>
+        {BLOCK_OPTIONS.map(({ type, label, icon: Icon }) => (
+          <button key={type} onClick={() => addBlock(type)} title={label}>
+            <Icon size={14} />
+            <span>{label}</span>
           </button>
         ))}
       </div>
