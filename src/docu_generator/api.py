@@ -76,6 +76,11 @@ def profile():
     }
 
 
+@app.post("/api/normalize")
+def normalize(payload: dict = Body(...)):
+    return {"project": _portable_payload(_payload_bytes(payload))}
+
+
 @app.get("/api/autosave")
 def get_autosave():
     raw = load_autosave()
