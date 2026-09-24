@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "docu-generator"
-version = "0.3.0"
-description = "Local-first block editor for professional user guides."
+version = "0.4.0"
+description = "Local-first documentation workspace with a React editor and Python publishing backend."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "streamlit>=1.44",
+    "fastapi>=0.116",
+    "uvicorn[standard]>=0.35",
     "openai>=1.70",
     "pydantic>=2.10",
     "python-dotenv>=1.0",
@@ -18,10 +20,11 @@ dependencies = [
     "markdown>=3.7",
     "reportlab>=4.2",
     "python-docx>=1.1",
+    "Pillow>=10.4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.28"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
