@@ -1,6 +1,6 @@
 import type { Project, ProjectEntry, ValidationIssue } from "./types";
 
-const API = process.env.NEXT_PUBLIC_DOCU_API || "http://127.0.0.1:8000";
+const API = process.env.NEXT_PUBLIC_DOCU_API || "http://127.0.0.1:8787";
 
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {
