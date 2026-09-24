@@ -18,6 +18,27 @@ CalloutVariant = Literal["info", "tip", "warning", "success"]
 ImageWidth = Literal["small", "medium", "large", "full"]
 Alignment = Literal["left", "center", "right"]
 DocumentStatus = Literal["Borrador", "En revisión", "Publicado", "Archivado"]
+AnnotationType = Literal["rect", "arrow", "number", "blur"]
+
+
+class ImageCrop(BaseModel):
+    x: float = 0
+    y: float = 0
+    width: float = 1
+    height: float = 1
+
+
+class ImageAnnotation(BaseModel):
+    id: str
+    type: AnnotationType
+    x: float = 0
+    y: float = 0
+    width: float = 0
+    height: float = 0
+    x2: float = 0
+    y2: float = 0
+    label: str = ""
+    color: str = "#00B8A9"
 
 
 class ScreenEvidence(BaseModel):
@@ -38,6 +59,8 @@ class GuideBlock(BaseModel):
     variant: CalloutVariant = "info"
     image_width: ImageWidth = "large"
     align: Alignment = "center"
+    annotations: list[ImageAnnotation] = Field(default_factory=list)
+    crop: ImageCrop | None = None
 
 
 class GuideSection(BaseModel):
