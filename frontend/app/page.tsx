@@ -1,5 +1,5 @@
-import EditorWorkspace from "@/components/EditorWorkspace";
+import ClientOnlyEditor from "@/components/ClientOnlyEditor";
 
 export default function Home() {
-  return <EditorWorkspace />;
+  return <ClientOnlyEditor />;
 }
