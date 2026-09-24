@@ -19,6 +19,7 @@ type InsertPreset = {
   type: BlockType;
   label?: string;
   variant?: Block["variant"];
+  text?: string;
 };
 
 type Props = {
@@ -139,6 +140,13 @@ export default function BlockCommandInput({ onInsert }: Props) {
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!open && event.key === "Enter" && value.trim()) {
+      event.preventDefault();
+      onInsert({ type: "text", text: value.trim() });
+      setValue("");
+      return;
+    }
+
     if (!open && event.key === "/") {
       setOpen(true);
       setActiveIndex(0);
