@@ -19,8 +19,8 @@ if not exist "frontend\node_modules" (
   popd
 )
 
-echo [Docu Generator] Arrancando API en http://127.0.0.1:8000
-start "Docu Generator API" cmd /k ".venv\Scripts\python.exe -m uvicorn docu_generator.api:app --reload --host 127.0.0.1 --port 8000"
+echo [Docu Generator] Arrancando API en http://127.0.0.1:8787
+start "Docu Generator API" cmd /k ".venv\Scripts\python.exe -m uvicorn docu_generator.api:app --reload --host 127.0.0.1 --port 8787"
 
 echo [Docu Generator] Arrancando frontend en http://localhost:3000
 pushd frontend
