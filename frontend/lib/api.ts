@@ -10,6 +10,17 @@ async function json<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export async function normalizeProject(payload: unknown): Promise<Project> {
+  const result = await json<{ project: Project }>(
+    await fetch(`${API}/api/normalize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  );
+  return result.project;
+}
+
 export async function getAutosave(): Promise<Project | null> {
   const result = await json<{ project: Project | null }>(
     await fetch(`${API}/api/autosave`, { cache: "no-store" }),
