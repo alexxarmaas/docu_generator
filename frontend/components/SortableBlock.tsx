@@ -27,6 +27,7 @@ type InsertPreset = {
   type: Block["type"];
   label?: string;
   variant?: Block["variant"];
+  text?: string;
 };
 
 type Props = {
