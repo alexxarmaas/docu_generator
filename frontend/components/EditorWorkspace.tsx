@@ -4,6 +4,8 @@ import {
   closestCenter,
   DndContext,
   DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -20,6 +22,7 @@ import {
   FileDown,
   FileText,
   FolderOpen,
+  Keyboard,
   Library,
   Plus,
   Redo2,
@@ -56,7 +59,9 @@ import type {
   Step,
   ValidationIssue,
 } from "@/lib/types";
+import AnnotatedImagePreview from "./AnnotatedImagePreview";
 import AnnotationModal from "./AnnotationModal";
+import ShortcutsModal from "./ShortcutsModal";
 import StepCard from "./StepCard";
 
 type EditingImage = {
@@ -82,6 +87,8 @@ export default function EditorWorkspace() {
   const [busyExport, setBusyExport] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [projectSearch, setProjectSearch] = useState("");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
@@ -212,7 +219,12 @@ export default function EditorWorkspace() {
     return null;
   };
 
+  const onDragStart = ({ active }: DragStartEvent) => {
+    setActiveBlockId(String(active.id));
+  };
+
   const onDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveBlockId(null);
     if (!over || active.id === over.id) return;
 
     const source = findBlock(String(active.id));
@@ -278,6 +290,15 @@ export default function EditorWorkspace() {
         ?.blocks.find((block) => block.id === editingImage.blockId) || null
     );
   }, [editingImage, project]);
+
+  const activeBlock = useMemo(() => {
+    if (!activeBlockId) return null;
+    for (const step of project.steps) {
+      const block = step.blocks.find((item) => item.id === activeBlockId);
+      if (block) return block;
+    }
+    return null;
+  }, [activeBlockId, project]);
 
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
@@ -425,6 +446,82 @@ export default function EditorWorkspace() {
     event.target.value = "";
   };
 
+  useEffect(() => {
+    const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      const typing = isTypingTarget(event.target);
+
+      if (modifier && key === "s") {
+        event.preventDefault();
+        void saveToLibrary();
+        return;
+      }
+
+      if (modifier && key === "z" && event.shiftKey) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
+      if (modifier && key === "z") {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (modifier && key === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
+      if (event.altKey && event.key === "1") {
+        event.preventDefault();
+        setInspectorTab("preview");
+        return;
+      }
+
+      if (event.altKey && event.key === "2") {
+        event.preventDefault();
+        setInspectorTab("checks");
+        return;
+      }
+
+      if (event.altKey && event.key === "3") {
+        event.preventDefault();
+        setInspectorTab("export");
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (shortcutsOpen) {
+          setShortcutsOpen(false);
+          return;
+        }
+        if (editingImage) {
+          setEditingImage(null);
+          return;
+        }
+      }
+
+      if (!typing && event.key === "?") {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [
+    editingImage,
+    future,
+    past,
+    project,
+    currentProject,
+    shortcutsOpen,
+  ]);
+
   const blocking = issues.some((issue) => issue.level === "error");
 
   const autosaveText =
@@ -477,6 +574,15 @@ export default function EditorWorkspace() {
             {apiOnline ? <Cloud size={14} /> : <CloudOff size={14} />}
             <span>{autosaveText}</span>
           </div>
+
+          <button
+            className="toolbar-icon shortcut-trigger"
+            onClick={() => setShortcutsOpen(true)}
+            title="Atajos de teclado (?)"
+            aria-label="Atajos de teclado"
+          >
+            <Keyboard size={15} />
+          </button>
         </div>
 
         <div className="app-actions">
@@ -751,6 +857,8 @@ export default function EditorWorkspace() {
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
+            onDragStart={onDragStart}
+            onDragCancel={() => setActiveBlockId(null)}
             onDragEnd={onDragEnd}
           >
             <div className="steps-stack">
@@ -768,6 +876,20 @@ export default function EditorWorkspace() {
                 />
               ))}
             </div>
+
+            <DragOverlay
+              dropAnimation={{
+                duration: 180,
+                easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+              }}
+            >
+              {activeBlock ? (
+                <div className="drag-overlay-card">
+                  <span className="drag-overlay-grip">⋮⋮</span>
+                  <span>{blockDisplayName(activeBlock)}</span>
+                </div>
+              ) : null}
+            </DragOverlay>
           </DndContext>
 
           <button className="add-step" onClick={addStep}>
@@ -917,6 +1039,11 @@ export default function EditorWorkspace() {
           </div>
         </aside>
       </div>
+
+      <ShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
 
       {editingBlock?.image_base64 && (
         <AnnotationModal
@@ -1086,13 +1213,7 @@ function PreviewBlock({ block }: { block: Block }) {
   if (block.type === "image" && block.image_base64) {
     return (
       <figure className={`preview-image ${block.image_width} ${block.align}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={dataUrl(block)} alt={block.image_caption || "Captura"} />
-        {(block.annotations.length > 0 || block.crop) && (
-          <span className="preview-annotation-note">
-            Edición visual aplicada en exportación
-          </span>
-        )}
+        <AnnotatedImagePreview block={block} />
         {block.image_caption && <figcaption>{block.image_caption}</figcaption>}
       </figure>
     );
@@ -1105,6 +1226,29 @@ function PreviewBlock({ block }: { block: Block }) {
   }
 
   return null;
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
+function blockDisplayName(block: Block) {
+  if (block.type === "text") return "Texto";
+  if (block.type === "image") return "Imagen";
+  if (block.type === "checklist") return "Checklist";
+  if (block.type === "table") return "Tabla";
+  if (block.type === "divider") return "Separador";
+  if (block.type === "pagebreak") return "Salto de página";
+  if (block.variant === "tip") return "Consejo";
+  if (block.variant === "warning") return "Importante";
+  if (block.variant === "success") return "Resultado esperado";
+  return "Información";
 }
 
 function slug(value: string) {
