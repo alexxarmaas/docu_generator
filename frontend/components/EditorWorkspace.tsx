@@ -27,6 +27,7 @@ import {
   getAutosave,
   listProjects,
   loadProject,
+  normalizeProject,
   saveAutosave,
   saveProject,
   validateProject,
@@ -376,18 +377,19 @@ export default function EditorWorkspace() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const imported = JSON.parse(String(reader.result));
-        if (!imported.steps || !imported.metadata) {
-          throw new Error("Formato no compatible");
+      void (async () => {
+        try {
+          const imported = JSON.parse(String(reader.result));
+          const normalized = await normalizeProject(imported);
+          setProject(normalized);
+          setPast([]);
+          setFuture([]);
+          setCurrentProject("");
+          setIssues([]);
+        } catch (error) {
+          window.alert(`No se pudo importar: ${String(error)}`);
         }
-        setProject(imported as Project);
-        setPast([]);
-        setFuture([]);
-        setCurrentProject("");
-      } catch (error) {
-        window.alert(`No se pudo importar: ${String(error)}`);
-      }
+      })();
     };
     reader.readAsText(file);
     event.target.value = "";
