@@ -117,10 +117,10 @@ def render_annotated_image(
         parsed_crop = crop if isinstance(crop, ImageCrop) else ImageCrop.model_validate(crop)
 
     if parsed_crop is not None:
-        left = int(_clamp(parsed_crop.x) * width)
-        top = int(_clamp(parsed_crop.y) * height)
-        right = int(_clamp(parsed_crop.x + parsed_crop.width) * width)
-        bottom = int(_clamp(parsed_crop.y + parsed_crop.height) * height)
+        left = round(_clamp(parsed_crop.x) * width)
+        top = round(_clamp(parsed_crop.y) * height)
+        right = round(_clamp(parsed_crop.x + parsed_crop.width) * width)
+        bottom = round(_clamp(parsed_crop.y + parsed_crop.height) * height)
 
         if right > left and bottom > top:
             image = image.crop((left, top, right, bottom))
