@@ -24,6 +24,7 @@ type InsertPreset = {
   type: Block["type"];
   label?: string;
   variant?: Block["variant"];
+  text?: string;
 };
 
 export default function StepCard({
@@ -96,7 +97,7 @@ export default function StepCard({
     const block: Block = {
       id,
       type: preset.type,
-      text: "",
+      text: preset.text || "",
       items: "",
       image_name: null,
       image_caption: "",
