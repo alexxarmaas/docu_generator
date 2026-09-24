@@ -11,12 +11,22 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import {
   Archive,
+  CheckCircle2,
+  ChevronRight,
+  Cloud,
+  CloudOff,
   Download,
+  Eye,
+  FileDown,
   FileText,
   FolderOpen,
+  Library,
   Plus,
   Redo2,
+  RefreshCw,
   Save,
+  Search,
+  Settings2,
   Undo2,
   Upload,
 } from "lucide-react";
@@ -54,18 +64,24 @@ type EditingImage = {
   blockId: string;
 } | null;
 
+type InspectorTab = "preview" | "checks" | "export";
+
 export default function EditorWorkspace() {
   const [project, setProject] = useState<Project>(() => createProject());
   const [past, setPast] = useState<Project[]>([]);
   const [future, setFuture] = useState<Project[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
-  const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [autosaveState, setAutosaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [currentProject, setCurrentProject] = useState("");
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [editingImage, setEditingImage] = useState<EditingImage>(null);
   const [busyExport, setBusyExport] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
+  const [projectSearch, setProjectSearch] = useState("");
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
@@ -208,7 +224,9 @@ export default function EditorWorkspace() {
 
     if (overId.startsWith("step:")) {
       const targetStepId = overId.slice(5);
-      targetStepIndex = project.steps.findIndex((step) => step.id === targetStepId);
+      targetStepIndex = project.steps.findIndex(
+        (step) => step.id === targetStepId,
+      );
     } else {
       const target = findBlock(overId);
       if (!target) return;
@@ -260,6 +278,14 @@ export default function EditorWorkspace() {
         ?.blocks.find((block) => block.id === editingImage.blockId) || null
     );
   }, [editingImage, project]);
+
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter((entry) =>
+      entry.name.toLowerCase().includes(query),
+    );
+  }, [projectSearch, projects]);
 
   const updateEditingImage = (
     annotations: Block["annotations"],
@@ -343,13 +369,17 @@ export default function EditorWorkspace() {
 
   const validate = async () => {
     try {
-      setIssues(await validateProject(project));
+      const result = await validateProject(project);
+      setIssues(result);
+      setInspectorTab("checks");
     } catch (error) {
       window.alert(`No se pudo validar: ${String(error)}`);
     }
   };
 
-  const exportAs = async (format: "pdf" | "docx" | "html" | "md" | "zip") => {
+  const exportAs = async (
+    format: "pdf" | "docx" | "html" | "md" | "zip",
+  ) => {
     setBusyExport(format);
     try {
       await downloadExport(project, format);
@@ -397,379 +427,496 @@ export default function EditorWorkspace() {
 
   const blocking = issues.some((issue) => issue.level === "error");
 
-  return (
-    <main className="workspace">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">DG</div>
-          <div>
-            <strong>Docu Generator</strong>
-            <span>Product docs workspace</span>
-          </div>
-        </div>
+  const autosaveText =
+    autosaveState === "saving"
+      ? "Guardando…"
+      : autosaveState === "saved"
+        ? "Guardado"
+        : autosaveState === "error"
+          ? "Error al guardar"
+          : "Listo";
 
-        <div className="connection-row">
-          <span className={`status-dot ${apiOnline ? "online" : "offline"}`} />
-          <span>{apiOnline ? "Backend local conectado" : "Backend desconectado"}</span>
-          <span className="autosave-label">
-            {autosaveState === "saving"
-              ? "Guardando…"
-              : autosaveState === "saved"
-                ? "Autosave ✓"
-                : autosaveState === "error"
-                  ? "Autosave ✕"
-                  : ""}
+  return (
+    <div className="app-shell">
+      <header className="app-bar">
+        <div className="app-brand">
+          <div className="brand-mark">DG</div>
+          <div className="brand-copy">
+            <strong>Docu Generator</strong>
+            <span>Brisia</span>
+          </div>
+          <ChevronRight size={15} className="breadcrumb-chevron" />
+          <span className="document-breadcrumb">
+            {project.title || "Documento sin título"}
           </span>
         </div>
 
-        <div className="sidebar-actions">
-          <button className="button secondary" onClick={undo} disabled={!past.length}>
-            <Undo2 size={15} /> Deshacer
-          </button>
-          <button className="button secondary" onClick={redo} disabled={!future.length}>
-            <Redo2 size={15} /> Rehacer
-          </button>
-        </div>
-
-        <section className="side-section">
-          <div className="side-heading">
-            <span>Biblioteca</span>
-            <button className="icon-button" onClick={() => void refreshProjects()}>
-              ↻
+        <div className="app-bar-center">
+          <div className="history-controls">
+            <button
+              className="toolbar-icon"
+              onClick={undo}
+              disabled={!past.length}
+              title="Deshacer"
+            >
+              <Undo2 size={16} />
+            </button>
+            <button
+              className="toolbar-icon"
+              onClick={redo}
+              disabled={!future.length}
+              title="Rehacer"
+            >
+              <Redo2 size={16} />
             </button>
           </div>
 
-          <div className="project-list">
-            {projects.length === 0 && (
-              <div className="empty-small">Sin proyectos guardados.</div>
-            )}
-            {projects.map((entry) => (
-              <div
-                key={entry.name}
-                className={`project-item ${currentProject === entry.name ? "active" : ""}`}
-              >
-                <button onClick={() => void openProject(entry.name)}>
-                  <FolderOpen size={15} />
-                  <span>{entry.name.replace(".docugen.json", "")}</span>
-                </button>
+          <div
+            className={`save-state ${autosaveState === "error" ? "error" : ""}`}
+          >
+            {apiOnline ? <Cloud size={14} /> : <CloudOff size={14} />}
+            <span>{autosaveText}</span>
+          </div>
+        </div>
+
+        <div className="app-actions">
+          <button className="button ghost" onClick={() => void validate()}>
+            <CheckCircle2 size={16} />
+            Validar
+          </button>
+          <button className="button secondary" onClick={() => void saveToLibrary()}>
+            <Save size={16} />
+            Guardar
+          </button>
+          <button className="button primary" onClick={() => void publish()}>
+            <Archive size={16} />
+            Publicar
+          </button>
+        </div>
+      </header>
+
+      <div className="workspace">
+        <aside className="sidebar">
+          <div className="sidebar-scroll">
+            <section className="sidebar-section library-section">
+              <div className="section-title-row">
+                <div>
+                  <Library size={15} />
+                  <strong>Biblioteca</strong>
+                </div>
                 <button
-                  className="project-delete"
-                  onClick={() => void removeProject(entry.name)}
-                  aria-label="Eliminar"
+                  className="toolbar-icon"
+                  onClick={() => void refreshProjects()}
+                  title="Actualizar"
                 >
-                  ×
+                  <RefreshCw size={14} />
                 </button>
               </div>
-            ))}
+
+              <div className="sidebar-search">
+                <Search size={14} />
+                <input
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Buscar proyecto…"
+                />
+              </div>
+
+              <div className="project-list">
+                {filteredProjects.length === 0 && (
+                  <div className="empty-small">
+                    {projects.length === 0
+                      ? "Todavía no hay proyectos guardados."
+                      : "No hay coincidencias."}
+                  </div>
+                )}
+
+                {filteredProjects.map((entry) => (
+                  <div
+                    key={entry.name}
+                    className={`project-item ${currentProject === entry.name ? "active" : ""}`}
+                  >
+                    <button onClick={() => void openProject(entry.name)}>
+                      <FolderOpen size={15} />
+                      <span>{entry.name.replace(".docugen.json", "")}</span>
+                    </button>
+                    <button
+                      className="project-delete"
+                      onClick={() => void removeProject(entry.name)}
+                      aria-label="Eliminar"
+                      title="Eliminar proyecto"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="quick-project-actions">
+                <button
+                  onClick={() => {
+                    setProject(createProject());
+                    setPast([]);
+                    setFuture([]);
+                    setCurrentProject("");
+                    setIssues([]);
+                  }}
+                >
+                  <Plus size={14} />
+                  Nuevo
+                </button>
+
+                <label>
+                  <Upload size={14} />
+                  Importar
+                  <input
+                    type="file"
+                    accept=".json"
+                    hidden
+                    onChange={importEditable}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <details className="settings-card" open>
+              <summary>
+                <span>
+                  <Settings2 size={15} />
+                  Documento
+                </span>
+              </summary>
+              <div className="settings-card-body">
+                <label>
+                  Tipo
+                  <input
+                    className="field"
+                    value={project.metadata.document_type}
+                    onChange={(event) =>
+                      commit({
+                        ...project,
+                        metadata: {
+                          ...project.metadata,
+                          document_type: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label>
+                    Versión
+                    <input
+                      className="field"
+                      value={project.metadata.version_label}
+                      onChange={(event) =>
+                        commit({
+                          ...project,
+                          metadata: {
+                            ...project.metadata,
+                            version_label: event.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Estado
+                    <select
+                      className="field"
+                      value={project.metadata.status}
+                      onChange={(event) =>
+                        commit({
+                          ...project,
+                          metadata: {
+                            ...project.metadata,
+                            status: event.target
+                              .value as Project["metadata"]["status"],
+                          },
+                        })
+                      }
+                    >
+                      <option>Borrador</option>
+                      <option>En revisión</option>
+                      <option>Publicado</option>
+                      <option>Archivado</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  Autor
+                  <input
+                    className="field"
+                    value={project.metadata.author}
+                    onChange={(event) =>
+                      commit({
+                        ...project,
+                        metadata: {
+                          ...project.metadata,
+                          author: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder="Nombre del autor"
+                  />
+                </label>
+
+                <div className="toggle-stack">
+                  <label>
+                    <span>
+                      <strong>Portada</strong>
+                      <small>Añadir portada al documento</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={project.metadata.show_cover}
+                      onChange={(event) =>
+                        commit({
+                          ...project,
+                          metadata: {
+                            ...project.metadata,
+                            show_cover: event.target.checked,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      <strong>Índice</strong>
+                      <small>Generar índice de pasos</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={project.metadata.show_toc}
+                      onChange={(event) =>
+                        commit({
+                          ...project,
+                          metadata: {
+                            ...project.metadata,
+                            show_toc: event.target.checked,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <div className="sidebar-footer-actions">
+              <button className="sidebar-link" onClick={exportEditable}>
+                <Download size={14} />
+                Descargar proyecto editable
+              </button>
+            </div>
           </div>
+        </aside>
 
-          <button className="button primary full" onClick={() => void saveToLibrary()}>
-            <Save size={15} /> Guardar en biblioteca
-          </button>
-        </section>
-
-        <section className="side-section">
-          <div className="side-heading">Documento</div>
-          <label>
-            Título
+        <section className="main-column">
+          <div className="editor-header">
+            <span className="editor-kicker">GUÍA DE USUARIO</span>
             <input
-              className="field"
+              className="document-title-input"
               value={project.title}
               onChange={(event) =>
                 commit({ ...project, title: event.target.value })
               }
-              placeholder="Cómo revisar un albarán"
+              placeholder="Escribe el título de la guía…"
             />
-          </label>
-          <label>
-            Tipo
-            <input
-              className="field"
-              value={project.metadata.document_type}
-              onChange={(event) =>
-                commit({
-                  ...project,
-                  metadata: {
-                    ...project.metadata,
-                    document_type: event.target.value,
-                  },
-                })
-              }
-            />
-          </label>
-          <div className="field-grid">
-            <label>
-              Versión
-              <input
-                className="field"
-                value={project.metadata.version_label}
-                onChange={(event) =>
-                  commit({
-                    ...project,
-                    metadata: {
-                      ...project.metadata,
-                      version_label: event.target.value,
-                    },
-                  })
-                }
-              />
-            </label>
-            <label>
-              Estado
-              <select
-                className="field"
-                value={project.metadata.status}
-                onChange={(event) =>
-                  commit({
-                    ...project,
-                    metadata: {
-                      ...project.metadata,
-                      status: event.target.value as Project["metadata"]["status"],
-                    },
-                  })
-                }
-              >
-                <option>Borrador</option>
-                <option>En revisión</option>
-                <option>Publicado</option>
-                <option>Archivado</option>
-              </select>
-            </label>
-          </div>
-          <label>
-            Autor
-            <input
-              className="field"
-              value={project.metadata.author}
-              onChange={(event) =>
-                commit({
-                  ...project,
-                  metadata: {
-                    ...project.metadata,
-                    author: event.target.value,
-                  },
-                })
-              }
-            />
-          </label>
-          <div className="toggle-row">
-            <label>
-              <input
-                type="checkbox"
-                checked={project.metadata.show_cover}
-                onChange={(event) =>
-                  commit({
-                    ...project,
-                    metadata: {
-                      ...project.metadata,
-                      show_cover: event.target.checked,
-                    },
-                  })
-                }
-              />
-              Portada
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={project.metadata.show_toc}
-                onChange={(event) =>
-                  commit({
-                    ...project,
-                    metadata: {
-                      ...project.metadata,
-                      show_toc: event.target.checked,
-                    },
-                  })
-                }
-              />
-              Índice
-            </label>
-          </div>
-        </section>
 
-        <section className="side-section">
-          <div className="side-heading">Proyecto</div>
-          <div className="sidebar-actions vertical">
-            <button
-              className="button secondary full"
-              onClick={() => {
-                setProject(createProject());
-                setPast([]);
-                setFuture([]);
-                setCurrentProject("");
-                setIssues([]);
-              }}
-            >
-              <Plus size={15} /> Nuevo proyecto
-            </button>
-            <label className="button secondary full">
-              <Upload size={15} /> Importar proyecto
-              <input type="file" accept=".json" hidden onChange={importEditable} />
-            </label>
-            <button className="button secondary full" onClick={exportEditable}>
-              <Download size={15} /> Proyecto editable
-            </button>
-          </div>
-        </section>
-      </aside>
-
-      <section className="main-column">
-        <header className="topbar">
-          <div>
-            <span className="eyebrow">BRISIA · DOCUMENTACIÓN</span>
-            <h1>{project.title || "Guía sin título"}</h1>
-          </div>
-          <div className="topbar-actions">
-            <button className="button secondary" onClick={() => void validate()}>
-              <FileText size={16} /> Validar
-            </button>
-            <button className="button primary" onClick={() => void publish()}>
-              <Archive size={16} /> Publicar versión
-            </button>
-          </div>
-        </header>
-
-        <div className="document-meta-line">
-          <span>{project.metadata.document_type}</span>
-          <span>v{project.metadata.version_label}</span>
-          <span>{project.metadata.status}</span>
-          {project.metadata.author && <span>{project.metadata.author}</span>}
-        </div>
-
-        <textarea
-          className="intro-editor"
-          value={project.introduction}
-          onChange={(event) =>
-            commit({ ...project, introduction: event.target.value })
-          }
-          placeholder="Introducción de la guía…"
-          rows={3}
-        />
-
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
-        >
-          <div className="steps-stack">
-            {project.steps.map((step, index) => (
-              <StepCard
-                key={step.id}
-                step={step}
-                index={index}
-                onStepChange={(next) => updateStep(step.id, next)}
-                onDelete={() => deleteStep(step.id)}
-                onDuplicate={() => duplicateStep(step.id)}
-                onAnnotate={(blockId) =>
-                  setEditingImage({ stepId: step.id, blockId })
-                }
-              />
-            ))}
-          </div>
-        </DndContext>
-
-        <button className="add-step" onClick={addStep}>
-          <Plus size={18} />
-          Añadir paso
-        </button>
-
-        <textarea
-          className="intro-editor closing-editor"
-          value={project.closing_note}
-          onChange={(event) =>
-            commit({ ...project, closing_note: event.target.value })
-          }
-          placeholder="Nota final o cierre…"
-          rows={3}
-        />
-      </section>
-
-      <aside className="preview-column">
-        <div className="preview-sticky">
-          <div className="preview-heading">
-            <div>
-              <span className="eyebrow">Vista previa</span>
-              <strong>{project.metadata.status}</strong>
+            <div className="document-meta-line">
+              <span>{project.metadata.document_type}</span>
+              <span>v{project.metadata.version_label}</span>
+              <span className={`status-pill status-${project.metadata.status.toLowerCase().replace(" ", "-")}`}>
+                {project.metadata.status}
+              </span>
+              {project.metadata.author && <span>{project.metadata.author}</span>}
             </div>
-            <button className="button ghost compact" onClick={() => void validate()}>
-              {issues.length} aviso(s)
+
+            <textarea
+              className="intro-editor"
+              value={project.introduction}
+              onChange={(event) =>
+                commit({ ...project, introduction: event.target.value })
+              }
+              placeholder="Añade una breve introducción para explicar qué aprenderá el usuario…"
+              rows={3}
+            />
+          </div>
+
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+          >
+            <div className="steps-stack">
+              {project.steps.map((step, index) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  index={index}
+                  onStepChange={(next) => updateStep(step.id, next)}
+                  onDelete={() => deleteStep(step.id)}
+                  onDuplicate={() => duplicateStep(step.id)}
+                  onAnnotate={(blockId) =>
+                    setEditingImage({ stepId: step.id, blockId })
+                  }
+                />
+              ))}
+            </div>
+          </DndContext>
+
+          <button className="add-step" onClick={addStep}>
+            <Plus size={17} />
+            <span>Añadir paso</span>
+          </button>
+
+          <div className="closing-card">
+            <span>Nota final</span>
+            <textarea
+              value={project.closing_note}
+              onChange={(event) =>
+                commit({ ...project, closing_note: event.target.value })
+              }
+              placeholder="Añade un cierre, recordatorio o siguiente paso…"
+              rows={3}
+            />
+          </div>
+        </section>
+
+        <aside className="inspector">
+          <div className="inspector-tabs">
+            <button
+              className={inspectorTab === "preview" ? "active" : ""}
+              onClick={() => setInspectorTab("preview")}
+            >
+              <Eye size={15} />
+              Preview
+            </button>
+            <button
+              className={inspectorTab === "checks" ? "active" : ""}
+              onClick={() => setInspectorTab("checks")}
+            >
+              <CheckCircle2 size={15} />
+              Revisar
+              {issues.length > 0 && (
+                <span className="tab-count">{issues.length}</span>
+              )}
+            </button>
+            <button
+              className={inspectorTab === "export" ? "active" : ""}
+              onClick={() => setInspectorTab("export")}
+            >
+              <FileDown size={15} />
+              Exportar
             </button>
           </div>
 
-          <div className="paper-preview">
-            {project.metadata.show_cover && (
-              <div className="preview-cover">
-                <span>BRISIA</span>
-                <h2>{project.title || "Guía sin título"}</h2>
-                <p>
-                  {project.metadata.document_type} · v
-                  {project.metadata.version_label}
-                </p>
+          <div className="inspector-body">
+            {inspectorTab === "preview" && (
+              <DocumentPreview project={project} />
+            )}
+
+            {inspectorTab === "checks" && (
+              <div className="checks-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span className="eyebrow">Control de calidad</span>
+                    <h3>Revisión del documento</h3>
+                  </div>
+                  <button className="button secondary compact" onClick={() => void validate()}>
+                    Revisar
+                  </button>
+                </div>
+
+                {issues.length === 0 ? (
+                  <div className="empty-checks">
+                    <CheckCircle2 size={28} />
+                    <strong>Sin problemas detectados</strong>
+                    <span>
+                      Pulsa “Revisar” para comprobar la guía antes de exportarla.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="validation-panel">
+                    {issues.map((issue, index) => (
+                      <div className={`issue ${issue.level}`} key={index}>
+                        <span className="issue-dot" />
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            <div className="preview-body">
-              {!project.metadata.show_cover && (
-                <h2>{project.title || "Guía sin título"}</h2>
-              )}
-              {project.introduction && <p>{project.introduction}</p>}
-
-              {project.metadata.show_toc && project.steps.length > 0 && (
-                <div className="preview-toc">
-                  <strong>Contenido</strong>
-                  {project.steps.map((step, index) => (
-                    <span key={step.id}>
-                      {index + 1}. {step.title || "Paso sin título"}
-                    </span>
-                  ))}
+            {inspectorTab === "export" && (
+              <div className="export-workspace">
+                <div className="panel-heading">
+                  <div>
+                    <span className="eyebrow">Publicación</span>
+                    <h3>Exportar documento</h3>
+                  </div>
                 </div>
-              )}
 
-              {project.steps.map((step, index) => (
-                <div className="preview-step" key={step.id}>
-                  <h3>
-                    <span>{index + 1}</span>
-                    {step.title || "Paso sin título"}
-                  </h3>
-                  {step.blocks.map((block) => (
-                    <PreviewBlock block={block} key={block.id} />
-                  ))}
-                </div>
-              ))}
+                {blocking && (
+                  <div className="export-warning">
+                    Hay errores de validación que debes corregir antes de exportar.
+                  </div>
+                )}
 
-              {project.closing_note && (
-                <div className="preview-callout success">
-                  {project.closing_note}
-                </div>
-              )}
-            </div>
+                <ExportCard
+                  title="PDF"
+                  description="Documento final listo para entregar o imprimir."
+                  primary
+                  disabled={blocking || busyExport !== null || !apiOnline}
+                  busy={busyExport === "pdf"}
+                  onClick={() => void exportAs("pdf")}
+                />
+                <ExportCard
+                  title="Word / DOCX"
+                  description="Documento editable para Word o LibreOffice."
+                  disabled={blocking || busyExport !== null || !apiOnline}
+                  busy={busyExport === "docx"}
+                  onClick={() => void exportAs("docx")}
+                />
+                <ExportCard
+                  title="HTML"
+                  description="Archivo autónomo para abrir en navegador."
+                  disabled={blocking || busyExport !== null || !apiOnline}
+                  busy={busyExport === "html"}
+                  onClick={() => void exportAs("html")}
+                />
+                <ExportCard
+                  title="Markdown"
+                  description="Versión ligera para repositorios o wikis."
+                  disabled={blocking || busyExport !== null || !apiOnline}
+                  busy={busyExport === "md"}
+                  onClick={() => void exportAs("md")}
+                />
+                <ExportCard
+                  title="ZIP completo"
+                  description="Incluye todos los formatos e imágenes."
+                  disabled={blocking || busyExport !== null || !apiOnline}
+                  busy={busyExport === "zip"}
+                  onClick={() => void exportAs("zip")}
+                />
+
+                {!apiOnline && (
+                  <div className="backend-notice">
+                    <CloudOff size={16} />
+                    Backend local desconectado. Comprueba que FastAPI esté activo.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
-          {issues.length > 0 && (
-            <div className="validation-panel">
-              {issues.map((issue, index) => (
-                <div className={`issue ${issue.level}`} key={index}>
-                  {issue.message}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="export-panel">
-            {(["pdf", "docx", "html", "md", "zip"] as const).map((format) => (
-              <button
-                key={format}
-                className={`button ${format === "pdf" ? "primary" : "secondary"}`}
-                disabled={blocking || busyExport !== null || !apiOnline}
-                onClick={() => void exportAs(format)}
-              >
-                {busyExport === format ? "Generando…" : format.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       {editingBlock?.image_base64 && (
         <AnnotationModal
@@ -781,7 +928,104 @@ export default function EditorWorkspace() {
           onSave={updateEditingImage}
         />
       )}
-    </main>
+    </div>
+  );
+}
+
+function DocumentPreview({ project }: { project: Project }) {
+  return (
+    <div className="preview-workspace">
+      <div className="preview-toolbar">
+        <div>
+          <span className="eyebrow">Vista final</span>
+          <strong>{project.metadata.status}</strong>
+        </div>
+        <span className="preview-zoom">A4</span>
+      </div>
+
+      <div className="paper-preview">
+        {project.metadata.show_cover && (
+          <div className="preview-cover">
+            <span>BRISIA</span>
+            <h2>{project.title || "Guía sin título"}</h2>
+            <p>
+              {project.metadata.document_type} · v
+              {project.metadata.version_label}
+            </p>
+          </div>
+        )}
+
+        <div className="preview-body">
+          {!project.metadata.show_cover && (
+            <h2>{project.title || "Guía sin título"}</h2>
+          )}
+
+          {project.introduction && <p>{project.introduction}</p>}
+
+          {project.metadata.show_toc && project.steps.length > 0 && (
+            <div className="preview-toc">
+              <strong>Contenido</strong>
+              {project.steps.map((step, index) => (
+                <span key={step.id}>
+                  {index + 1}. {step.title || "Paso sin título"}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {project.steps.map((step, index) => (
+            <div className="preview-step" key={step.id}>
+              <h3>
+                <span>{index + 1}</span>
+                {step.title || "Paso sin título"}
+              </h3>
+              {step.blocks.map((block) => (
+                <PreviewBlock block={block} key={block.id} />
+              ))}
+            </div>
+          ))}
+
+          {project.closing_note && (
+            <div className="preview-callout success">
+              {project.closing_note}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExportCard({
+  title,
+  description,
+  primary = false,
+  disabled,
+  busy,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  primary?: boolean;
+  disabled: boolean;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`export-card ${primary ? "primary" : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <div className="export-card-icon">
+        <FileText size={18} />
+      </div>
+      <div>
+        <strong>{busy ? "Generando…" : title}</strong>
+        <span>{description}</span>
+      </div>
+      <Download size={16} className="export-card-download" />
+    </button>
   );
 }
 
@@ -817,6 +1061,7 @@ function PreviewBlock({ block }: { block: Block }) {
       .split("\n")
       .filter(Boolean)
       .map((row) => row.split("|").map((cell) => cell.trim()));
+
     return (
       <div className="preview-table-wrap">
         <table className="preview-table">
@@ -854,6 +1099,7 @@ function PreviewBlock({ block }: { block: Block }) {
   }
 
   if (block.type === "divider") return <hr className="preview-divider" />;
+
   if (block.type === "pagebreak") {
     return <div className="preview-pagebreak">salto de página</div>;
   }
