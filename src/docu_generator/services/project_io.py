@@ -5,7 +5,7 @@ import json
 from uuid import uuid4
 
 
-PROJECT_VERSION = 3
+PROJECT_VERSION = 4
 
 
 DEFAULT_METADATA = {
@@ -13,6 +13,7 @@ DEFAULT_METADATA = {
     "version_label": "1.0",
     "status": "Borrador",
     "author": "",
+    "updated_at": "",
     "show_cover": True,
     "show_toc": True,
 }
@@ -32,7 +33,7 @@ def _decode_image(raw: str | None) -> bytes | None:
 
 def _normalize_block(block: dict) -> dict:
     return {
-        "id": uuid4().hex,
+        "id": block.get("id") or uuid4().hex,
         "type": block.get("type", "text"),
         "text": block.get("text", ""),
         "items": block.get("items", ""),
@@ -44,6 +45,8 @@ def _normalize_block(block: dict) -> dict:
         "variant": block.get("variant", "info"),
         "image_width": block.get("image_width", "large"),
         "align": block.get("align", "center"),
+        "annotations": block.get("annotations") or [],
+        "crop": block.get("crop"),
     }
 
 
@@ -62,6 +65,7 @@ def dump_project(
         for block in step.get("blocks", []):
             payload_blocks.append(
                 {
+                    "id": block.get("id") or uuid4().hex,
                     "type": block.get("type", "text"),
                     "text": block.get("text", ""),
                     "items": block.get("items", ""),
@@ -73,11 +77,14 @@ def dump_project(
                     "variant": block.get("variant", "info"),
                     "image_width": block.get("image_width", "large"),
                     "align": block.get("align", "center"),
+                    "annotations": block.get("annotations") or [],
+                    "crop": block.get("crop"),
                 }
             )
 
         payload_steps.append(
             {
+                "id": step.get("id") or uuid4().hex,
                 "title": step.get("title", ""),
                 "blocks": payload_blocks,
             }
@@ -99,30 +106,14 @@ def dump_project(
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
-def _load_v3(payload: dict) -> list[dict]:
+def _load_structured(payload: dict) -> list[dict]:
     steps = []
 
     for item in payload.get("steps", []):
         blocks = [_normalize_block(block) for block in item.get("blocks", [])]
         steps.append(
             {
-                "id": uuid4().hex,
-                "title": item.get("title", ""),
-                "blocks": blocks,
-            }
-        )
-
-    return steps
-
-
-def _load_v2(payload: dict) -> list[dict]:
-    steps = []
-
-    for item in payload.get("steps", []):
-        blocks = [_normalize_block(block) for block in item.get("blocks", [])]
-        steps.append(
-            {
-                "id": uuid4().hex,
+                "id": item.get("id") or uuid4().hex,
                 "title": item.get("title", ""),
                 "blocks": blocks,
             }
@@ -156,6 +147,8 @@ def _legacy_block(
         "variant": variant,
         "image_width": "large",
         "align": "center",
+        "annotations": [],
+        "crop": None,
     }
 
 
@@ -167,9 +160,7 @@ def _load_v1(payload: dict) -> list[dict]:
         blocks = []
 
         if item.get("body"):
-            blocks.append(
-                _legacy_block("text", text=item.get("body", ""))
-            )
+            blocks.append(_legacy_block("text", text=item.get("body", "")))
 
         image_bytes = _decode_image(item.get("image_base64"))
         if item.get("image_name") or image_bytes is not None:
@@ -216,10 +207,8 @@ def load_project(raw: bytes) -> dict:
     payload = json.loads(raw.decode("utf-8"))
     version = payload.get("version", 1)
 
-    if version == 3:
-        steps = _load_v3(payload)
-    elif version == 2:
-        steps = _load_v2(payload)
+    if version in {4, 3, 2}:
+        steps = _load_structured(payload)
     elif version == 1:
         steps = _load_v1(payload)
     else:
@@ -235,3 +224,15 @@ def load_project(raw: bytes) -> dict:
         "metadata": metadata,
         "steps": steps,
     }
+
+
+def normalize_project(raw: bytes) -> bytes:
+    """Return any supported project encoded in the current portable format."""
+    project = load_project(raw)
+    return dump_project(
+        title=project["title"],
+        introduction=project["introduction"],
+        closing_note=project["closing_note"],
+        steps=project["steps"],
+        metadata=project["metadata"],
+    )
