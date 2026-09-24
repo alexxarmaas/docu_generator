@@ -19,6 +19,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Annotation, AnnotationType, Crop } from "@/lib/types";
@@ -35,6 +36,15 @@ type Props = {
 };
 
 const COLORS = ["#00B8A9", "#092D54", "#E24A4A", "#F2A93B"];
+
+const TOOLBAR: Array<[Tool, LucideIcon, string]> = [
+  ["select", MousePointer2, "Seleccionar"],
+  ["rect", Square, "Rectángulo"],
+  ["arrow", ArrowUpRight, "Flecha"],
+  ["number", Hash, "Número"],
+  ["blur", EyeOff, "Blur"],
+  ["crop", CropIcon, "Recortar"],
+];
 
 export default function AnnotationCanvas({
   imageUrl,
@@ -292,14 +302,7 @@ export default function AnnotationCanvas({
   return (
     <div className="annotation-workspace">
       <div className="annotation-toolbar">
-        {[
-          ["select", MousePointer2, "Seleccionar"],
-          ["rect", Square, "Rectángulo"],
-          ["arrow", ArrowUpRight, "Flecha"],
-          ["number", Hash, "Número"],
-          ["blur", EyeOff, "Blur"],
-          ["crop", CropIcon, "Recortar"],
-        ].map(([value, Icon, label]) => (
+        {TOOLBAR.map(([value, Icon, label]) => (
           <button
             key={String(value)}
             className={`tool-button ${tool === value ? "active" : ""}`}
